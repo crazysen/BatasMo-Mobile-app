@@ -1,0 +1,461 @@
+-- BatasMo core database schema for Supabase
+-- Run this in Supabase SQL Editor.
+
+create extension if not exists pgcrypto;
+
+-- Enums
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_role') THEN
+    CREATE TYPE user_role AS ENUM ('Client', 'Attorney', 'Admin');
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'appointment_status') THEN
+    CREATE TYPE appointment_status AS ENUM ('pending', 'confirmed', 'completed', 'cancelled', 'rescheduled');
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'request_status') THEN
+    CREATE TYPE request_status AS ENUM ('pending', 'accepted', 'rejected', 'completed', 'cancelled');
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'payment_status') THEN
+    CREATE TYPE payment_status AS ENUM ('pending', 'paid', 'failed', 'refunded');
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'payout_status') THEN
+    CREATE TYPE payout_status AS ENUM ('requested', 'processing', 'paid', 'rejected');
+  END IF;
+END $$;
+
+-- Common updated_at trigger
+CREATE OR REPLACE FUNCTION public.set_updated_at()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$;
+
+-- Profiles linked to Supabase Auth users
+CREATE TABLE IF NOT EXISTS public.profiles (
+  id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  full_name text,
+  email text UNIQUE,
+  role user_role NOT NULL DEFAULT 'Client',
+  phone text,
+  address text,
+  avatar_url text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TRIGGER trg_profiles_updated_at
+BEFORE UPDATE ON public.profiles
+FOR EACH ROW
+EXECUTE FUNCTION public.set_updated_at();
+
+-- Auto-create profile when a new auth user is created
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  INSERT INTO public.profiles (id, email, full_name, role)
+  VALUES (
+    NEW.id,
+    NEW.email,
+    COALESCE(NEW.raw_user_meta_data ->> 'full_name', ''),
+    COALESCE((NEW.raw_user_meta_data ->> 'role')::user_role, 'Client')
+  )
+  ON CONFLICT (id) DO UPDATE
+  SET
+    email = EXCLUDED.email,
+    full_name = COALESCE(NULLIF(EXCLUDED.full_name, ''), public.profiles.full_name),
+    role = EXCLUDED.role,
+    updated_at = now();
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+AFTER INSERT ON auth.users
+FOR EACH ROW
+EXECUTE FUNCTION public.handle_new_user();
+
+-- Attorney-only extra profile data
+CREATE TABLE IF NOT EXISTS public.attorney_profiles (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL UNIQUE REFERENCES public.profiles(id) ON DELETE CASCADE,
+  firm_name text,
+  years_experience int,
+  specialties text[] DEFAULT '{}',
+  bio text,
+  consultation_fee numeric(12,2) DEFAULT 0,
+  is_verified boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TRIGGER trg_attorney_profiles_updated_at
+BEFORE UPDATE ON public.attorney_profiles
+FOR EACH ROW
+EXECUTE FUNCTION public.set_updated_at();
+
+-- Attorney availability slots
+CREATE TABLE IF NOT EXISTS public.availability_slots (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  attorney_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  start_time timestamptz NOT NULL,
+  end_time timestamptz NOT NULL,
+  is_booked boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT availability_time_check CHECK (end_time > start_time)
+);
+
+CREATE INDEX IF NOT EXISTS idx_availability_attorney_time
+  ON public.availability_slots(attorney_id, start_time);
+
+CREATE TRIGGER trg_availability_slots_updated_at
+BEFORE UPDATE ON public.availability_slots
+FOR EACH ROW
+EXECUTE FUNCTION public.set_updated_at();
+
+-- Appointments between client and attorney
+CREATE TABLE IF NOT EXISTS public.appointments (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  attorney_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  slot_id uuid REFERENCES public.availability_slots(id) ON DELETE SET NULL,
+  title text,
+  notes text,
+  scheduled_at timestamptz NOT NULL,
+  duration_minutes int NOT NULL DEFAULT 60,
+  status appointment_status NOT NULL DEFAULT 'pending',
+  amount numeric(12,2) NOT NULL DEFAULT 0,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT appointment_duration_check CHECK (duration_minutes > 0)
+);
+
+CREATE INDEX IF NOT EXISTS idx_appointments_client ON public.appointments(client_id);
+CREATE INDEX IF NOT EXISTS idx_appointments_attorney ON public.appointments(attorney_id);
+CREATE INDEX IF NOT EXISTS idx_appointments_status_time ON public.appointments(status, scheduled_at);
+
+CREATE TRIGGER trg_appointments_updated_at
+BEFORE UPDATE ON public.appointments
+FOR EACH ROW
+EXECUTE FUNCTION public.set_updated_at();
+
+-- Consultation rooms and messages
+CREATE TABLE IF NOT EXISTS public.consultation_rooms (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  appointment_id uuid NOT NULL UNIQUE REFERENCES public.appointments(id) ON DELETE CASCADE,
+  is_closed boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TRIGGER trg_consultation_rooms_updated_at
+BEFORE UPDATE ON public.consultation_rooms
+FOR EACH ROW
+EXECUTE FUNCTION public.set_updated_at();
+
+CREATE TABLE IF NOT EXISTS public.messages (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  room_id uuid NOT NULL REFERENCES public.consultation_rooms(id) ON DELETE CASCADE,
+  sender_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  message text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_messages_room_created
+  ON public.messages(room_id, created_at);
+
+-- Notarial requests
+CREATE TABLE IF NOT EXISTS public.notarial_requests (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  attorney_id uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+  service_type text NOT NULL,
+  details text,
+  document_url text,
+  preferred_date timestamptz,
+  status request_status NOT NULL DEFAULT 'pending',
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_notarial_client ON public.notarial_requests(client_id);
+CREATE INDEX IF NOT EXISTS idx_notarial_attorney ON public.notarial_requests(attorney_id);
+CREATE INDEX IF NOT EXISTS idx_notarial_status ON public.notarial_requests(status);
+
+CREATE TRIGGER trg_notarial_requests_updated_at
+BEFORE UPDATE ON public.notarial_requests
+FOR EACH ROW
+EXECUTE FUNCTION public.set_updated_at();
+
+-- Payments and payout tracking
+CREATE TABLE IF NOT EXISTS public.transactions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  appointment_id uuid REFERENCES public.appointments(id) ON DELETE SET NULL,
+  client_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  attorney_id uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+  amount numeric(12,2) NOT NULL,
+  currency text NOT NULL DEFAULT 'PHP',
+  payment_method text,
+  payment_status payment_status NOT NULL DEFAULT 'pending',
+  provider_reference text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_transactions_client ON public.transactions(client_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_attorney ON public.transactions(attorney_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_status ON public.transactions(payment_status);
+
+CREATE TRIGGER trg_transactions_updated_at
+BEFORE UPDATE ON public.transactions
+FOR EACH ROW
+EXECUTE FUNCTION public.set_updated_at();
+
+CREATE TABLE IF NOT EXISTS public.payout_requests (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  attorney_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  amount numeric(12,2) NOT NULL,
+  status payout_status NOT NULL DEFAULT 'requested',
+  payout_reference text,
+  requested_at timestamptz NOT NULL DEFAULT now(),
+  processed_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_payout_requests_attorney ON public.payout_requests(attorney_id);
+CREATE INDEX IF NOT EXISTS idx_payout_requests_status ON public.payout_requests(status);
+
+CREATE TRIGGER trg_payout_requests_updated_at
+BEFORE UPDATE ON public.payout_requests
+FOR EACH ROW
+EXECUTE FUNCTION public.set_updated_at();
+
+-- Notifications
+CREATE TABLE IF NOT EXISTS public.notifications (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  title text NOT NULL,
+  body text NOT NULL,
+  type text,
+  data jsonb NOT NULL DEFAULT '{}'::jsonb,
+  is_read boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user_created
+  ON public.notifications(user_id, created_at DESC);
+
+CREATE TRIGGER trg_notifications_updated_at
+BEFORE UPDATE ON public.notifications
+FOR EACH ROW
+EXECUTE FUNCTION public.set_updated_at();
+
+-- Enable Row Level Security
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.attorney_profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.availability_slots ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.appointments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.consultation_rooms ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.notarial_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.payout_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
+
+-- Profiles policies
+DROP POLICY IF EXISTS "profiles_select_own" ON public.profiles;
+CREATE POLICY "profiles_select_own"
+ON public.profiles FOR SELECT
+USING (auth.uid() = id);
+
+DROP POLICY IF EXISTS "profiles_insert_own" ON public.profiles;
+CREATE POLICY "profiles_insert_own"
+ON public.profiles FOR INSERT
+WITH CHECK (auth.uid() = id);
+
+DROP POLICY IF EXISTS "profiles_update_own" ON public.profiles;
+CREATE POLICY "profiles_update_own"
+ON public.profiles FOR UPDATE
+USING (auth.uid() = id)
+WITH CHECK (auth.uid() = id);
+
+-- Attorney profile policies
+DROP POLICY IF EXISTS "attorney_profiles_select_all_auth" ON public.attorney_profiles;
+CREATE POLICY "attorney_profiles_select_all_auth"
+ON public.attorney_profiles FOR SELECT
+USING (auth.role() = 'authenticated');
+
+DROP POLICY IF EXISTS "attorney_profiles_owner_write" ON public.attorney_profiles;
+CREATE POLICY "attorney_profiles_owner_write"
+ON public.attorney_profiles FOR ALL
+USING (auth.uid() = user_id)
+WITH CHECK (auth.uid() = user_id);
+
+-- Availability policies
+DROP POLICY IF EXISTS "availability_select_all_auth" ON public.availability_slots;
+CREATE POLICY "availability_select_all_auth"
+ON public.availability_slots FOR SELECT
+USING (auth.role() = 'authenticated');
+
+DROP POLICY IF EXISTS "availability_owner_write" ON public.availability_slots;
+CREATE POLICY "availability_owner_write"
+ON public.availability_slots FOR ALL
+USING (auth.uid() = attorney_id)
+WITH CHECK (auth.uid() = attorney_id);
+
+-- Appointment policies
+DROP POLICY IF EXISTS "appointments_participant_select" ON public.appointments;
+CREATE POLICY "appointments_participant_select"
+ON public.appointments FOR SELECT
+USING (auth.uid() = client_id OR auth.uid() = attorney_id);
+
+DROP POLICY IF EXISTS "appointments_client_insert" ON public.appointments;
+CREATE POLICY "appointments_client_insert"
+ON public.appointments FOR INSERT
+WITH CHECK (auth.uid() = client_id);
+
+DROP POLICY IF EXISTS "appointments_participant_update" ON public.appointments;
+CREATE POLICY "appointments_participant_update"
+ON public.appointments FOR UPDATE
+USING (auth.uid() = client_id OR auth.uid() = attorney_id)
+WITH CHECK (auth.uid() = client_id OR auth.uid() = attorney_id);
+
+-- Consultation room policies
+DROP POLICY IF EXISTS "rooms_participant_select" ON public.consultation_rooms;
+CREATE POLICY "rooms_participant_select"
+ON public.consultation_rooms FOR SELECT
+USING (
+  EXISTS (
+    SELECT 1
+    FROM public.appointments a
+    WHERE a.id = consultation_rooms.appointment_id
+      AND (a.client_id = auth.uid() OR a.attorney_id = auth.uid())
+  )
+);
+
+DROP POLICY IF EXISTS "rooms_participant_write" ON public.consultation_rooms;
+CREATE POLICY "rooms_participant_write"
+ON public.consultation_rooms FOR ALL
+USING (
+  EXISTS (
+    SELECT 1
+    FROM public.appointments a
+    WHERE a.id = consultation_rooms.appointment_id
+      AND (a.client_id = auth.uid() OR a.attorney_id = auth.uid())
+  )
+)
+WITH CHECK (
+  EXISTS (
+    SELECT 1
+    FROM public.appointments a
+    WHERE a.id = consultation_rooms.appointment_id
+      AND (a.client_id = auth.uid() OR a.attorney_id = auth.uid())
+  )
+);
+
+-- Message policies
+DROP POLICY IF EXISTS "messages_participant_select" ON public.messages;
+CREATE POLICY "messages_participant_select"
+ON public.messages FOR SELECT
+USING (
+  EXISTS (
+    SELECT 1
+    FROM public.consultation_rooms r
+    JOIN public.appointments a ON a.id = r.appointment_id
+    WHERE r.id = messages.room_id
+      AND (a.client_id = auth.uid() OR a.attorney_id = auth.uid())
+  )
+);
+
+DROP POLICY IF EXISTS "messages_sender_insert" ON public.messages;
+CREATE POLICY "messages_sender_insert"
+ON public.messages FOR INSERT
+WITH CHECK (
+  sender_id = auth.uid()
+  AND EXISTS (
+    SELECT 1
+    FROM public.consultation_rooms r
+    JOIN public.appointments a ON a.id = r.appointment_id
+    WHERE r.id = messages.room_id
+      AND (a.client_id = auth.uid() OR a.attorney_id = auth.uid())
+  )
+);
+
+-- Notarial request policies
+DROP POLICY IF EXISTS "notarial_owner_select" ON public.notarial_requests;
+CREATE POLICY "notarial_owner_select"
+ON public.notarial_requests FOR SELECT
+USING (auth.uid() = client_id OR auth.uid() = attorney_id);
+
+DROP POLICY IF EXISTS "notarial_client_insert" ON public.notarial_requests;
+CREATE POLICY "notarial_client_insert"
+ON public.notarial_requests FOR INSERT
+WITH CHECK (auth.uid() = client_id);
+
+DROP POLICY IF EXISTS "notarial_participant_update" ON public.notarial_requests;
+CREATE POLICY "notarial_participant_update"
+ON public.notarial_requests FOR UPDATE
+USING (auth.uid() = client_id OR auth.uid() = attorney_id)
+WITH CHECK (auth.uid() = client_id OR auth.uid() = attorney_id);
+
+-- Transaction policies
+DROP POLICY IF EXISTS "transactions_participant_select" ON public.transactions;
+CREATE POLICY "transactions_participant_select"
+ON public.transactions FOR SELECT
+USING (auth.uid() = client_id OR auth.uid() = attorney_id);
+
+DROP POLICY IF EXISTS "transactions_client_insert" ON public.transactions;
+CREATE POLICY "transactions_client_insert"
+ON public.transactions FOR INSERT
+WITH CHECK (auth.uid() = client_id);
+
+DROP POLICY IF EXISTS "transactions_participant_update" ON public.transactions;
+CREATE POLICY "transactions_participant_update"
+ON public.transactions FOR UPDATE
+USING (auth.uid() = client_id OR auth.uid() = attorney_id)
+WITH CHECK (auth.uid() = client_id OR auth.uid() = attorney_id);
+
+-- Payout policies
+DROP POLICY IF EXISTS "payout_owner_select" ON public.payout_requests;
+CREATE POLICY "payout_owner_select"
+ON public.payout_requests FOR SELECT
+USING (auth.uid() = attorney_id);
+
+DROP POLICY IF EXISTS "payout_owner_insert" ON public.payout_requests;
+CREATE POLICY "payout_owner_insert"
+ON public.payout_requests FOR INSERT
+WITH CHECK (auth.uid() = attorney_id);
+
+DROP POLICY IF EXISTS "payout_owner_update" ON public.payout_requests;
+CREATE POLICY "payout_owner_update"
+ON public.payout_requests FOR UPDATE
+USING (auth.uid() = attorney_id)
+WITH CHECK (auth.uid() = attorney_id);
+
+-- Notification policies
+DROP POLICY IF EXISTS "notifications_owner_select" ON public.notifications;
+CREATE POLICY "notifications_owner_select"
+ON public.notifications FOR SELECT
+USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "notifications_owner_update" ON public.notifications;
+CREATE POLICY "notifications_owner_update"
+ON public.notifications FOR UPDATE
+USING (auth.uid() = user_id)
+WITH CHECK (auth.uid() = user_id);
