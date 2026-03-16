@@ -74,7 +74,10 @@ export default function Login({navigation}) {
       const message = error?.message ?? 'Unable to sign in.';
       const normalized = message.toLowerCase();
 
-      if (normalized.includes('email not confirmed')) {
+      if (
+        normalized.includes('email not confirmed') ||
+        normalized.includes('email not verified')
+      ) {
         Alert.alert(
           'Email Not Verified',
           'Please verify your account using the code sent to your email.',
