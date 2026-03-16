@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {
   StyleSheet,
   Text,
@@ -11,32 +11,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import {appendThreadMessage, ensureThreadSeed, getThreadMessages} from '../services/chatService';
 
 const ArrowLeft = (props) => <MaterialCommunityIcons name="arrow-left" {...props} />;
 const Paperclip = (props) => <MaterialCommunityIcons name="paperclip" {...props} />;
 const Send = (props) => <MaterialCommunityIcons name="send" {...props} />;
 const ShieldCheck = (props) => <MaterialCommunityIcons name="shield-check" {...props} />;
-
-const INITIAL_MESSAGES = [
-  {
-    id: '1',
-    text: 'e ello Attorney, I have some questions regarding the deed of sale we discussed.',
-    time: '10:00 AM',
-    sender: 'client',
-  },
-  {
-    id: '2',
-    text: 'Good morning! I have reviewed the initial draft. What specifically would you like to clarify?',
-    time: '10:02 AM',
-    sender: 'me',
-  },
-  {
-    id: '3',
-    text: 'In Section 4, the payment terms seem a bit ambiguous. Can we make them more explicit?',
-    time: '10:05 AM',
-    sender: 'client',
-  },
-];
 
 const MessageBubble = ({ item }) => {
   const isMe = item.sender === 'me';
@@ -57,8 +37,41 @@ const MessageBubble = ({ item }) => {
 
 export default function ConsultationChat({ navigation, route }) {
   const [message, setMessage] = useState('');
+  const [messages, setMessages] = useState([]);
   const clientName = route?.params?.clientName || 'Sarah Jenkins';
   const clientInitials = route?.params?.clientInitials || 'SJ';
+  const threadId = useMemo(
+    () => String(route?.params?.chatId || route?.params?.clientName || 'general-chat'),
+    [route?.params?.chatId, route?.params?.clientName],
+  );
+
+  const loadThread = useCallback(async () => {
+    const seed = [
+      {
+        id: 'seed-1',
+        text: `Consultation thread started with ${clientName}.`,
+        sender: 'client',
+        time: new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}),
+      },
+    ];
+    await ensureThreadSeed(threadId, seed);
+    const rows = await getThreadMessages(threadId);
+    setMessages(rows);
+  }, [clientName, threadId]);
+
+  useEffect(() => {
+    loadThread();
+  }, [loadThread]);
+
+  const handleSend = async () => {
+    if (!message.trim()) return;
+    const next = await appendThreadMessage(threadId, {
+      text: message,
+      sender: 'me',
+    });
+    setMessages(next);
+    setMessage('');
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -82,7 +95,7 @@ export default function ConsultationChat({ navigation, route }) {
       </View>
 
       <FlatList
-        data={INITIAL_MESSAGES}
+        data={messages}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => <MessageBubble item={item} />}
         contentContainerStyle={styles.chatList}
@@ -113,7 +126,7 @@ export default function ConsultationChat({ navigation, route }) {
               multiline
               maxHeight={100}
             />
-            <TouchableOpacity style={styles.sendBtn} onPress={() => setMessage('')}>
+            <TouchableOpacity style={styles.sendBtn} onPress={handleSend}>
               <Send size={20} color="#FFF" />
             </TouchableOpacity>
           </View>

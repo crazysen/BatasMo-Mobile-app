@@ -8,9 +8,15 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const AttorneySidebar = ({navigation}) => {
+const AttorneySidebar = ({navigation, route}) => {
+  const stackState = navigation.getState();
+  const previousRouteName =
+    stackState?.routes?.[Math.max(0, (stackState?.index ?? 0) - 1)]?.name ??
+    'AttyLandingPage';
+  const activeRoute = route?.params?.activeRoute || previousRouteName;
+
   const menuItems = [
-    {id: '1', label: 'Dashboard', icon: '⊞', active: true, route: 'AttyLandingPage'},
+    {id: '1', label: 'Dashboard', icon: '⊞', route: 'AttyLandingPage'},
     {id: '2', label: 'My Schedule', icon: '🕒', route: 'AttyAvailabilityManager'},
     {id: '3', label: 'Consultation Requests', icon: '📥', route: 'AttyConsultationRequest'},
     {id: '4', label: 'Upcoming Appointments', icon: '📅', route: 'AttyMyAppointments'},
@@ -49,19 +55,22 @@ const AttorneySidebar = ({navigation}) => {
         </View>
 
         <View style={styles.navSection}>
-          {menuItems.map(item => (
-            <TouchableOpacity
-              key={item.id}
-              style={[styles.navItem, item.active && styles.activeNavItem]}
-              onPress={() => handleMenuPress(item)}>
-              <Text style={[styles.navIcon, item.active && styles.activeText]}>
-                {item.icon}
-              </Text>
-              <Text style={[styles.navLabel, item.active && styles.activeText]}>
-                {item.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
+          {menuItems.map(item => {
+            const isActive = activeRoute === item.route;
+            return (
+              <TouchableOpacity
+                key={item.id}
+                style={[styles.navItem, isActive && styles.activeNavItem]}
+                onPress={() => handleMenuPress(item)}>
+                <Text style={[styles.navIcon, isActive && styles.activeText]}>
+                  {item.icon}
+                </Text>
+                <Text style={[styles.navLabel, isActive && styles.activeText]}>
+                  {item.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
         <View style={styles.divider} />

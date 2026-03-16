@@ -1,100 +1,149 @@
-import React from 'react';
+import React, {useCallback, useEffect, useState} from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import {SafeAreaView} from 'react-native-safe-area-context';
+import {getMyAppointments} from '../services/appointmentService';
 
-const appointments = [
-  {
-    id: '1',
-    name: 'Dr. Sarah Johnson',
-    specialty: 'Corporate Law',
-    status: 'APPROVED',
-    payment: 'PAID',
-    date: 'Feb 17, 2026',
-    time: '10:00 AM',
-    location: 'Office Room 301',
-  },
-  {
-    id: '2',
-    name: 'Mr. Michael Chen',
-    specialty: 'Family Law',
-    status: 'APPROVED',
-    payment: 'UNPAID',
-    date: 'Feb 20, 2026',
-    time: '2:00 PM',
-    location: 'Office Room 205',
-  },
-];
+function formatDateTime(isoDateTime) {
+  if (!isoDateTime) {
+    return {date: 'No schedule', time: '--:--'};
+  }
+
+  const rawValue = String(isoDateTime).trim();
+  const normalizedValue = rawValue
+    .replace(' ', 'T')
+    .replace(/\+00$/, 'Z');
+
+  let value = new Date(normalizedValue);
+  if (Number.isNaN(value.getTime())) {
+    const localMatch = rawValue.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})(?::\d{2})?/);
+    if (localMatch) {
+      value = new Date(`${localMatch[1]}T${localMatch[2]}:00`);
+    }
+  }
+
+  if (Number.isNaN(value.getTime())) {
+    return {date: 'No schedule', time: '--:--'};
+  }
+
+  return {
+    date: value.toLocaleDateString(),
+    time: value.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}),
+  };
+}
 
 export default function MyAppointments({navigation}) {
+  const [appointments, setAppointments] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadAppointments = useCallback(async () => {
+    try {
+      setLoading(true);
+      const records = await getMyAppointments();
+      setAppointments(Array.isArray(records) ? records : []);
+    } catch (error) {
+      Alert.alert('Error', error?.message ?? 'Failed to load appointments.');
+      setAppointments([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadAppointments();
+  }, [loadAppointments]);
+
+  const handleBack = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
+    navigation.navigate('HomepageClient');
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+        <TouchableOpacity style={styles.backButton} onPress={handleBack}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
 
         <Text style={styles.screenTitle}>My Appointments</Text>
         <Text style={styles.screenSubtitle}>Manage and track all your appointments</Text>
 
-        {appointments.map(item => (
-          <View key={item.id} style={styles.card}>
-            <View style={styles.cardHeader}>
-              <View>
-                <Text style={styles.lawyerName}>{item.name}</Text>
-                <Text style={styles.specialty}>{item.specialty}</Text>
-              </View>
-              <View style={styles.badgeRow}>
-                <View style={styles.badgeDark}>
-                  <Text style={styles.badgeDarkText}>{item.status}</Text>
-                </View>
-                <View
-                  style={[
-                    styles.badgeLight,
-                    item.payment === 'PAID' ? styles.badgePaid : styles.badgeUnpaid,
-                  ]}>
-                  <Text
-                    style={[
-                      styles.badgeLightText,
-                      item.payment === 'PAID' ? styles.badgePaidText : styles.badgeUnpaidText,
-                    ]}>
-                    {item.payment}
-                  </Text>
-                </View>
-              </View>
-            </View>
-
-            <Text style={styles.detailText}>📅 {item.date}</Text>
-            <Text style={styles.detailText}>🕒 {item.time}</Text>
-            <Text style={styles.detailText}>📍 {item.location}</Text>
-
-            <TouchableOpacity
-              style={styles.primaryButton}
-              onPress={() =>
-                navigation.navigate('EnterConsultationChat', {
-                  chatName: item.name,
-                  initials: item.name
-                    .split(' ')
-                    .map(part => part[0])
-                    .join('')
-                    .slice(0, 2),
-                })
-              }>
-              <Text style={styles.primaryButtonText}>Enter Consultation</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.secondaryButton}
-              onPress={() => navigation.navigate('RescheduleAppointment', { appointment: item })}>
-              <Text style={styles.secondaryButtonText}>Reschedule</Text>
-            </TouchableOpacity>
+        {loading ? (
+          <View style={styles.emptyCard}>
+            <ActivityIndicator color="#0F172A" />
+            <Text style={styles.emptyText}>Loading appointments...</Text>
           </View>
-        ))}
+        ) : appointments.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyTitle}>No appointments yet</Text>
+            <Text style={styles.emptyText}>Your bookings will appear here once submitted.</Text>
+          </View>
+        ) : (
+          appointments.map(item => {
+            const status = (item.status ?? 'PENDING').toUpperCase();
+            const {date, time} = formatDateTime(item.scheduled_at);
+            const canChat =
+              status === 'CONFIRMED' ||
+              status === 'COMPLETED' ||
+              status === 'RESCHEDULED';
+            return (
+              <View key={item.id} style={styles.card}>
+                <View style={styles.cardHeader}>
+                  <View>
+                    <Text style={styles.lawyerName}>{item.attorney_name ?? 'Attorney not assigned'}</Text>
+                    <Text style={styles.specialty}>{item.title ?? 'Consultation'}</Text>
+                  </View>
+                  <View style={styles.badgeRow}>
+                    <View style={styles.badgeDark}>
+                      <Text style={styles.badgeDarkText}>{status}</Text>
+                    </View>
+                  </View>
+                </View>
+
+                <Text style={styles.detailText}>📅 {date}</Text>
+                <Text style={styles.detailText}>🕒 {time}</Text>
+                <Text style={styles.detailText}>📝 {item.notes || 'No additional notes'}</Text>
+
+                {canChat ? (
+                  <TouchableOpacity
+                    style={styles.primaryButton}
+                    onPress={() =>
+                      navigation.navigate('EnterConsultationChat', {
+                        chatId: item.id,
+                        chatName: item.attorney_name ?? 'Attorney',
+                        initials: (item.attorney_name ?? 'Attorney')
+                          .split(' ')
+                          .map(part => part[0])
+                          .join('')
+                          .slice(0, 2)
+                          .toUpperCase(),
+                      })
+                    }>
+                    <Text style={styles.primaryButtonText}>Message Attorney</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <View style={styles.pendingState}>
+                    <Text style={styles.pendingStateText}>
+                      {status === 'CANCELLED'
+                        ? 'Appointment cancelled'
+                        : 'Awaiting attorney approval'}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            );
+          })
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -121,12 +170,6 @@ const styles = StyleSheet.create({
   badgeRow: {flexDirection: 'row'},
   badgeDark: {backgroundColor: '#1E293B', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, marginLeft: 6},
   badgeDarkText: {color: '#FFFFFF', fontSize: 10, fontWeight: '700'},
-  badgeLight: {borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, marginLeft: 6},
-  badgePaid: {backgroundColor: '#FDE68A'},
-  badgeUnpaid: {backgroundColor: '#FCE7F3'},
-  badgeLightText: {fontSize: 10, fontWeight: '700'},
-  badgePaidText: {color: '#854D0E'},
-  badgeUnpaidText: {color: '#BE185D'},
   detailText: {color: '#475569', marginBottom: 4},
   primaryButton: {
     marginTop: 12,
@@ -136,13 +179,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   primaryButtonText: {color: '#FFFFFF', fontWeight: '700'},
-  secondaryButton: {
-    marginTop: 10,
-    backgroundColor: '#EAB308',
+  pendingState: {
+    marginTop: 12,
+    backgroundColor: '#FEF3C7',
     borderRadius: 10,
-    paddingVertical: 12,
+    paddingVertical: 10,
     alignItems: 'center',
   },
-  secondaryButtonText: {color: '#FFFFFF', fontWeight: '700'},
+  pendingStateText: {color: '#92400E', fontWeight: '700'},
+  emptyCard: {
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    padding: 20,
+    alignItems: 'center',
+  },
+  emptyTitle: {fontSize: 16, fontWeight: '700', color: '#0F172A', marginBottom: 6},
+  emptyText: {fontSize: 13, color: '#64748B', textAlign: 'center'},
 });
-

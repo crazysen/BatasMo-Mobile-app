@@ -9,11 +9,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function BookingSummary({navigation, route}) {
-  const [paymentMethod, setPaymentMethod] = useState('GCash');
+  const [paymentMethod, setPaymentMethod] = useState('gcash');
   const serviceData = route?.params?.serviceData || { type: 'Power of Attorney', date: 'February 15, 2026', time: '2:00 PM', amount: '₱2,500' };
+  const paymentContext = route?.params?.paymentContext || null;
 
   const handleProceedToPayment = () => {
-    navigation.navigate('Payment', { paymentMethod, serviceData });
+    navigation.navigate('Payment', { paymentMethod, serviceData, paymentContext });
   };
 
   const handleClose = () => {
@@ -82,9 +83,9 @@ export default function BookingSummary({navigation, route}) {
 
           <Text style={styles.selectionTitle}>Select Payment Method</Text>
           
-          <PaymentOption id="GCash" label="GCash" icon="📱" color="#3B82F6" />
-          <PaymentOption id="Card" label="Credit/Debit Card" icon="💳" color="#A855F7" />
-          <PaymentOption id="Bank" label="Bank Transfer" icon="🏦" color="#10B981" />
+          <PaymentOption id="gcash" label="GCash" icon="📱" color="#3B82F6" />
+          <PaymentOption id="card" label="Credit/Debit Card" icon="💳" color="#A855F7" />
+          <PaymentOption id="banktransfer" label="Bank Transfer" icon="🏦" color="#10B981" />
 
           <TouchableOpacity style={styles.proceedButton} onPress={handleProceedToPayment}>
             <Text style={styles.proceedButtonText}>Proceed to Payment</Text>

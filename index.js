@@ -29,6 +29,7 @@ import RescheduleAppointment from './screens/RescheduleAppointment.js';
 import BookingSummary from './screens/BookingSummary.js';
 import Payment from './screens/Payment.js';
 import PaymentSuccessful from './screens/PaymentSuccessful.js';
+import PaymentTranscript from './screens/PaymentTranscript.js';
 import BookNow from './screens/BookNow.js';
 import NotarialRequestSubmitted from './screens/NotarialRequestSubmitted.js';
 import PaymentMethod from './screens/PaymentMethod.js';
@@ -94,6 +95,7 @@ function App() {
           <Stack.Screen name="BookingSummary" component={BookingSummary} />
           <Stack.Screen name="Payment" component={Payment} />
           <Stack.Screen name="PaymentSuccessful" component={PaymentSuccessful} />
+          <Stack.Screen name="PaymentTranscript" component={PaymentTranscript} />
           <Stack.Screen name="BookNow" component={BookNow} />
           <Stack.Screen name="NotarialRequestSubmitted" component={NotarialRequestSubmitted} />
           <Stack.Screen name="PaymentMethod" component={PaymentMethod} />

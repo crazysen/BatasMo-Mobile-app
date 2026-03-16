@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, {useState} from 'react';
 import {
+  Alert,
   StyleSheet,
   View,
   Text,
@@ -8,9 +9,13 @@ import {
   TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import {createAppointment} from '../services/appointmentService';
 
 export default function BookNow({navigation, route}) {
   const [selectedTime, setSelectedTime] = useState('12:00 PM');
+  const [selectedDate, setSelectedDate] = useState('2026-02-17');
+  const [reason, setReason] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const attorney = route?.params?.attorney || { name: 'Dr. Sarah Johnson', specialty: 'Corporate Law', price: '₱2,500.00' };
 
   const timeSlots = [
@@ -19,8 +24,52 @@ export default function BookNow({navigation, route}) {
     '3:00 PM', '4:00 PM', '5:00 PM'
   ];
 
-  const handleSubmit = () => {
-    navigation.navigate('BookingRequestSubmitted', { attorney });
+  const handleSubmit = async () => {
+    if (!attorney?.id) {
+      Alert.alert('Error', 'Please select an attorney from the list first.');
+      return;
+    }
+
+    if (!selectedDate.trim()) {
+      Alert.alert('Error', 'Please enter a preferred date (YYYY-MM-DD).');
+      return;
+    }
+
+    if (!reason.trim()) {
+      Alert.alert('Error', 'Please describe your legal concern.');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      const [time, modifier] = selectedTime.split(' ');
+      const [rawHour, rawMinute] = time.split(':');
+      let hour = Number(rawHour);
+      if (modifier === 'PM' && hour < 12) {
+        hour += 12;
+      }
+      if (modifier === 'AM' && hour === 12) {
+        hour = 0;
+      }
+      const minute = Number(rawMinute);
+      const formattedHour = String(hour).padStart(2, '0');
+      const formattedMinute = String(minute).padStart(2, '0');
+      const scheduleDateTime = `${selectedDate}T${formattedHour}:${formattedMinute}:00`;
+
+      await createAppointment({
+        attorney_id: attorney.id,
+        title: `Consultation - ${attorney.specialty ?? 'General'}`,
+        notes: reason.trim(),
+        scheduled_at: scheduleDateTime,
+        amount: Number(String(attorney.price || '').replace(/[^\d.]/g, '')) || 2500,
+      });
+
+      navigation.navigate('BookingRequestSubmitted', {attorney});
+    } catch (error) {
+      Alert.alert('Error', error?.message ?? 'Unable to submit booking request.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleCancel = () => {
@@ -61,7 +110,12 @@ export default function BookNow({navigation, route}) {
           {/* Select Date */}
           <Text style={styles.inputLabel}>📅 Select Date</Text>
           <TouchableOpacity style={styles.datePicker}>
-            <Text style={styles.dateText}>17/02/2026</Text>
+            <TextInput
+              value={selectedDate}
+              onChangeText={setSelectedDate}
+              style={styles.dateTextInput}
+              placeholder="YYYY-MM-DD"
+            />
             <Text style={styles.calendarIcon}>📅</Text>
           </TouchableOpacity>
 
@@ -95,6 +149,8 @@ export default function BookNow({navigation, route}) {
             placeholderTextColor="#94A3B8"
             multiline
             numberOfLines={4}
+            value={reason}
+            onChangeText={setReason}
           />
 
           {/* Note Box */}
@@ -105,8 +161,8 @@ export default function BookNow({navigation, route}) {
           </View>
 
           {/* Action Buttons */}
-          <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
-            <Text style={styles.submitButtonText}>Submit Booking Request</Text>
+          <TouchableOpacity style={styles.submitButton} onPress={handleSubmit} disabled={submitting}>
+            <Text style={styles.submitButtonText}>{submitting ? 'Submitting...' : 'Submit Booking Request'}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
@@ -157,6 +213,12 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   dateText: { fontSize: 14, color: '#475569' },
+  dateTextInput: {
+    flex: 1,
+    fontSize: 14,
+    color: '#475569',
+    paddingVertical: 0,
+  },
   calendarIcon: { fontSize: 16, color: '#64748B' },
   timeGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 24 },
   timeChip: {

@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, {useMemo, useState} from 'react';
 import {
+  Alert,
+  ActivityIndicator,
   StyleSheet,
   View,
   Text,
@@ -7,14 +9,58 @@ import {
   TouchableOpacity,
   ScrollView,
 } from 'react-native';
+import {SafeAreaView} from 'react-native-safe-area-context';
+import {rescheduleAppointment} from '../services/appointmentService';
 
 export default function RescheduleAppointment({navigation, route}) {
+  const [selectedDate, setSelectedDate] = useState('2026-02-24');
   const [selectedTime, setSelectedTime] = useState('11:00 AM');
+  const [reason, setReason] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const timeSlots = ['9:00 AM', '10:00 AM', '11:00 AM', '1:00 PM', '2:00 PM'];
-  const appointment = route?.params?.appointment || { name: 'Dr. Sarah Johnson', date: 'Feb 17', time: '10:00 AM' };
+  const appointment = route?.params?.appointment || {name: 'Client', date: 'N/A', time: 'N/A'};
+  const returnRoute = route?.params?.returnRoute || 'AttyMyAppointments';
 
-  const handleConfirm = () => {
-    navigation.navigate('MyAppointments');
+  const appointmentTitle = useMemo(
+    () => `With ${appointment.name} • ${appointment.date}, ${appointment.time}`,
+    [appointment.date, appointment.name, appointment.time],
+  );
+
+  const buildScheduleDateTime = () => {
+    const [time, modifier] = selectedTime.split(' ');
+    const [rawHour, rawMinute] = time.split(':');
+    let hour = Number(rawHour);
+    if (modifier === 'PM' && hour < 12) hour += 12;
+    if (modifier === 'AM' && hour === 12) hour = 0;
+    const minute = Number(rawMinute);
+
+    const formattedHour = String(hour).padStart(2, '0');
+    const formattedMinute = String(minute).padStart(2, '0');
+    return `${selectedDate}T${formattedHour}:${formattedMinute}:00`;
+  };
+
+  const handleConfirm = async () => {
+    if (!appointment?.id) {
+      Alert.alert('Error', 'Missing appointment reference.');
+      return;
+    }
+
+    if (!selectedDate.trim()) {
+      Alert.alert('Error', 'Please set a new date.');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      const scheduledAt = buildScheduleDateTime();
+      await rescheduleAppointment(appointment.id, scheduledAt, reason.trim());
+      Alert.alert('Success', 'Appointment has been rescheduled.');
+      navigation.navigate(returnRoute);
+    } catch (error) {
+      Alert.alert('Error', error?.message ?? 'Unable to reschedule appointment.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleCancel = () => {
@@ -22,7 +68,7 @@ export default function RescheduleAppointment({navigation, route}) {
   };
 
   return (
-    <View style={styles.overlay}>
+    <SafeAreaView style={styles.overlay}>
       <View style={styles.modalContainer}>
         <View style={styles.dragHandle} />
 
@@ -31,16 +77,20 @@ export default function RescheduleAppointment({navigation, route}) {
 
           <View style={styles.infoBanner}>
             <Text style={styles.infoIcon}>ⓘ</Text>
-            <Text style={styles.infoBannerText}>
-              With {appointment.name} • {appointment.date}, {appointment.time}
-            </Text>
+            <Text style={styles.infoBannerText}>{appointmentTitle}</Text>
           </View>
 
           <Text style={styles.sectionLabel}>Select New Date</Text>
-          <TouchableOpacity style={styles.datePicker}>
-            <Text style={styles.dateText}>Feb 24, 2026</Text>
+          <View style={styles.datePicker}>
+            <TextInput
+              value={selectedDate}
+              onChangeText={setSelectedDate}
+              style={styles.dateInput}
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor="#94A3B8"
+            />
             <Text style={styles.calendarIcon}>📅</Text>
-          </TouchableOpacity>
+          </View>
 
           <Text style={styles.sectionLabel}>Select New Time Slot</Text>
           <View style={styles.timeGrid}>
@@ -72,6 +122,8 @@ export default function RescheduleAppointment({navigation, route}) {
             placeholderTextColor="#94A3B8"
             multiline
             numberOfLines={4}
+            value={reason}
+            onChangeText={setReason}
           />
 
           <View style={styles.policyBox}>
@@ -81,8 +133,12 @@ export default function RescheduleAppointment({navigation, route}) {
             </Text>
           </View>
 
-          <TouchableOpacity style={styles.confirmButton} onPress={handleConfirm}>
-            <Text style={styles.confirmButtonText}>Confirm Reschedule</Text>
+          <TouchableOpacity style={styles.confirmButton} onPress={handleConfirm} disabled={submitting}>
+            {submitting ? (
+              <ActivityIndicator color="#1E293B" />
+            ) : (
+              <Text style={styles.confirmButtonText}>Confirm Reschedule</Text>
+            )}
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
@@ -90,7 +146,7 @@ export default function RescheduleAppointment({navigation, route}) {
           </TouchableOpacity>
         </ScrollView>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -148,6 +204,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   dateText: { fontSize: 16, color: '#0F172A' },
+  dateInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#0F172A',
+    paddingVertical: 0,
+  },
   calendarIcon: { fontSize: 16 },
   timeGrid: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 24 },
   timeChip: {

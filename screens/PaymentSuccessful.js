@@ -9,9 +9,33 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function PaymentSuccessful({navigation, route}) {
   const amount = route?.params?.amount || '₱2,500.00';
+  const transactionId = route?.params?.transactionId || 'BTMS-UNKNOWN';
+  const paymentContext = route?.params?.paymentContext || null;
+  const serviceData = route?.params?.serviceData || null;
+  const isConsultationPayment = paymentContext?.sourceType === 'appointment';
 
   const handleBackToDashboard = () => {
-    navigation.navigate('HomepageClient');
+    if (isConsultationPayment) {
+      navigation.reset({
+        index: 1,
+        routes: [{name: 'HomepageClient'}, {name: 'MyAppointments'}],
+      });
+      return;
+    }
+
+    navigation.reset({
+      index: 0,
+      routes: [{name: 'HomepageClient'}],
+    });
+  };
+
+  const handleViewTranscript = () => {
+    navigation.navigate('PaymentTranscript', {
+      transactionId,
+      amount,
+      paymentContext,
+      serviceData,
+    });
   };
 
   return (
@@ -22,7 +46,11 @@ export default function PaymentSuccessful({navigation, route}) {
         </View>
 
         <Text style={styles.title}>Payment Successful</Text>
-        <Text style={styles.transactionId}>TRANSACTION ID: BTMS-88294-XP</Text>
+        <Text style={styles.transactionId}>TRANSACTION ID: {transactionId}</Text>
+
+        <View style={styles.completedPill}>
+          <Text style={styles.completedPillText}>STATUS: COMPLETED</Text>
+        </View>
 
         <View style={styles.amountCard}>
           <Text style={styles.amountLabel}>AMOUNT PAID</Text>
@@ -34,8 +62,14 @@ export default function PaymentSuccessful({navigation, route}) {
           <Text style={styles.boldText}> Documents vault</Text>.
         </Text>
 
+        <TouchableOpacity style={styles.transcriptButton} onPress={handleViewTranscript}>
+          <Text style={styles.transcriptButtonText}>View Transcript</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity style={styles.dashboardButton} onPress={handleBackToDashboard}>
-          <Text style={styles.buttonText}>Back to Dashboard</Text>
+          <Text style={styles.buttonText}>
+            {isConsultationPayment ? 'Go to My Appointments' : 'Back to Dashboard'}
+          </Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -88,7 +122,19 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     fontWeight: 'bold',
     letterSpacing: 1.5,
-    marginBottom: 30,
+    marginBottom: 12,
+  },
+  completedPill: {
+    backgroundColor: '#DCFCE7',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    marginBottom: 24,
+  },
+  completedPillText: {
+    color: '#166534',
+    fontWeight: '700',
+    fontSize: 12,
   },
   amountCard: {
     backgroundColor: '#1E293B',
@@ -121,6 +167,20 @@ const styles = StyleSheet.create({
   boldText: {
     fontWeight: 'bold',
     color: '#475569',
+  },
+  transcriptButton: {
+    borderWidth: 1,
+    borderColor: '#1E293B',
+    paddingVertical: 16,
+    borderRadius: 16,
+    width: '100%',
+    marginBottom: 12,
+  },
+  transcriptButtonText: {
+    color: '#1E293B',
+    textAlign: 'center',
+    fontWeight: '700',
+    fontSize: 16,
   },
   dashboardButton: {
     backgroundColor: '#D9B041',

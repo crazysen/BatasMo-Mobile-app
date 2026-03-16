@@ -27,9 +27,14 @@ const AttorneyProfile = ({ navigation, route }) => {
 
   const handleBookConsultation = () => {
     if (navigation && navigation.navigate) {
-      navigation.navigate('EnterConsultationChat', {
-        chatName: attorney.name,
-        initials: attorney.name.split(' ').map(n => n[0]).join('')
+      navigation.navigate('BookNow', {
+        attorney: {
+          id: attorney.id,
+          name: attorney.name,
+          specialty: attorney.specialty,
+          price: attorney.price,
+          image: attorney.image,
+        },
       });
     }
   };

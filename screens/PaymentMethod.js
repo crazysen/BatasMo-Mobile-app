@@ -11,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 export default function PaymentMethod({navigation, route}) {
   const [selectedMethod, setSelectedMethod] = useState(null);
   const serviceData = route?.params?.serviceData || { type: 'Consultation', amount: '₱2,500' };
+  const paymentContext = route?.params?.paymentContext || null;
 
   const paymentMethods = [
     { id: 'gcash', name: 'GCash', icon: '📱', description: 'Mobile wallet payment' },
@@ -20,7 +21,11 @@ export default function PaymentMethod({navigation, route}) {
 
   const handleContinue = () => {
     if (selectedMethod) {
-      navigation.navigate('Payment', { paymentMethod: selectedMethod, serviceData });
+      navigation.navigate('Payment', {
+        paymentMethod: selectedMethod,
+        serviceData,
+        paymentContext,
+      });
     }
   };
 

@@ -9,23 +9,6 @@ const RECOVERY_EMAIL_KEY = 'recovery_email';
 const RECOVERY_CODE_KEY = 'recovery_code';
 
 export async function signUpWithEmail({email, password, fullName, role}) {
-  const supabase = requireSupabase();
-  const {data, error} = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      data: {
-        full_name: fullName,
-        role,
-      },
-    },
-  });
-
-  if (error) throw error;
-  return data;
-}
-
-export async function signInWithEmail({email, password}) {
   const response = await apiRequest('/auth/register', {
     method: 'POST',
     body: {

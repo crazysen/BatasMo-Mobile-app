@@ -22,3 +22,16 @@ export async function updateAppointmentStatus(appointmentId, status) {
   });
   return response?.data;
 }
+
+export async function rescheduleAppointment(appointmentId, scheduledAt, reason) {
+  const response = await apiRequest(`/appointments/${appointmentId}/status`, {
+    method: 'PUT',
+    auth: true,
+    body: {
+      status: 'rescheduled',
+      scheduled_at: scheduledAt,
+      reschedule_reason: reason,
+    },
+  });
+  return response?.data;
+}

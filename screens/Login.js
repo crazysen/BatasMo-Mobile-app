@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import {useUserProfile} from '../context/UserProfileContext';
 import {signInWithEmail} from '../services/authService';
+import {getMyProfile} from '../services/profileService';
 
 const colors = {
   navy: '#0F1E36',
@@ -50,18 +51,29 @@ export default function Login({navigation}) {
       });
 
       const user = data?.user;
-      const roleFromMetadata = user?.user_metadata?.role;
-      const fullNameFromMetadata = user?.user_metadata?.full_name;
+      let backendProfile = null;
+      try {
+        backendProfile = await getMyProfile();
+      } catch (_) {
+        backendProfile = null;
+      }
+
+      const roleFromApi = user?.role ?? backendProfile?.role;
+      const fullNameFromApi = user?.name ?? backendProfile?.full_name;
       const normalizedRole =
-        roleFromMetadata === 'Attorney' || roleFromMetadata === 'Client'
-          ? roleFromMetadata
+        String(roleFromApi || '').toLowerCase() === 'attorney'
+          ? 'Attorney'
+          : String(roleFromApi || '').toLowerCase() === 'client'
+            ? 'Client'
           : isClient
             ? 'Client'
             : 'Attorney';
 
       updateProfile({
-        email: user?.email ?? email.trim(),
-        name: fullNameFromMetadata ?? 'BatasMo User',
+        email: backendProfile?.email ?? user?.email ?? email.trim(),
+        name: fullNameFromApi ?? 'BatasMo User',
+        phone: backendProfile?.phone ?? '',
+        address: backendProfile?.address ?? '',
         role: normalizedRole,
       });
 

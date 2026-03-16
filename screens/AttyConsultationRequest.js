@@ -1,306 +1,262 @@
-import React from 'react';
+import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
   StyleSheet,
   Text,
-  View,
-  TextInput,
   TouchableOpacity,
-  FlatList,
-  StatusBar,
+  View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import {SafeAreaView} from 'react-native-safe-area-context';
+import {getMyAppointments, updateAppointmentStatus} from '../services/appointmentService';
 
-const Search = (props) => <MaterialCommunityIcons name="magnify" {...props} />;
-const SlidersHorizontal = (props) => <MaterialCommunityIcons name="tune" {...props} />;
-const Calendar = (props) => <MaterialCommunityIcons name="calendar" {...props} />;
-const FileText = (props) => <MaterialCommunityIcons name="file-document" {...props} />;
-const Check = (props) => <MaterialCommunityIcons name="check" {...props} />;
-const X = (props) => <MaterialCommunityIcons name="close" {...props} />;
-const Clock = (props) => <MaterialCommunityIcons name="clock-outline" {...props} />;
+function formatDateTime(isoDateTime) {
+  if (!isoDateTime) {
+    return {date: 'No schedule', time: '--:--'};
+  }
 
-const DATA = [
-  {
-    id: '1',
-    initials: 'MR',
-    name: 'Michael Roberts',
-    type: 'Civil Litigation',
-    date: 'Oct 24, 2024',
-    time: '10:00 AM',
-    status: 'PENDING',
-    paymentStatus: 'PAID',
-    description: 'Neighbor boundary dispute resulting in property damage to my fence and garden area.',
-  },
-  {
-    id: '2',
-    initials: 'SJ',
-    name: 'Sarah Jenkins',
-    type: 'Family Law',
-    date: 'Oct 25, 2024',
-    time: '02:30 PM',
-    status: 'APPROVED',
-    paymentStatus: 'PAID',
-    description: 'Questions regarding child custody arrangements and visitation rights for upcoming holiday season.',
-  },
-  {
-    id: '3',
-    initials: 'DC',
-    name: 'David Chen',
-    type: 'Corporate Law',
-    date: 'Oct 25, 2024',
-    time: '04:00 PM',
-    status: 'PENDING',
-    paymentStatus: 'PAID',
-    description: 'Drafting of a service agreement for a new startup venture in the fintech sector.',
-  },
-  {
-    id: '4',
-    initials: 'ET',
-    name: 'Emma Thompson',
-    type: 'Property Dispute',
-    date: 'Oct 26, 2024',
-    time: '09:15 AM',
-    status: 'PENDING',
-    paymentStatus: 'UNPAID',
-    description: '',
-  },
-];
+  const rawValue = String(isoDateTime).trim();
+  const normalizedValue = rawValue
+    .replace(' ', 'T')
+    .replace(/\+00$/, 'Z');
 
-const ConsultationCard = ({ item, navigation }) => {
-  const isApproved = item.status === 'APPROVED';
+  let value = new Date(normalizedValue);
+  if (Number.isNaN(value.getTime())) {
+    const localMatch = rawValue.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})(?::\d{2})?/);
+    if (localMatch) {
+      value = new Date(`${localMatch[1]}T${localMatch[2]}:00`);
+    }
+  }
 
-  return (
-    <View style={styles.card}>
-      <View style={styles.cardHeader}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{item.initials}</Text>
-        </View>
-        <View style={styles.headerInfo}>
-          <View style={styles.nameRow}>
-            <Text style={styles.clientName}>{item.name}</Text>
-            <View style={[styles.statusBadge, isApproved ? styles.statusApproved : styles.statusPending]}>
-              <Text style={[styles.statusText, isApproved ? styles.textApproved : styles.textPending]}>
-                {item.status}
-              </Text>
-            </View>
-          </View>
-          <View style={styles.metaRow}>
-            <FileText size={14} color="#6B7280" />
-            <Text style={styles.metaText}>{item.type}</Text>
-          </View>
-          <View style={styles.metaRow}>
-            <Calendar size={14} color="#6B7280" />
-            <Text style={styles.metaText}>{item.date} • {item.time}</Text>
-            <View style={[styles.dot, { backgroundColor: item.paymentStatus === 'PAID' ? '#10B981' : '#D1D5DB' }]} />
-            <Text style={[styles.paymentText, { color: item.paymentStatus === 'PAID' ? '#10B981' : '#9CA3AF' }]}>
-              {item.paymentStatus}
-            </Text>
-          </View>
-        </View>
-      </View>
+  if (Number.isNaN(value.getTime())) {
+    return {date: 'No schedule', time: '--:--'};
+  }
 
-      {isApproved ? (
-        <TouchableOpacity 
-          style={styles.enterBtn}
-          onPress={() => navigation.navigate('AttyConsultationMessage', { clientName: item.name, clientInitials: item.initials })}
-        >
-          <View style={styles.enterBtnContent}>
-            <Text style={styles.enterBtnText}>💬 ENTER CONSULTATION</Text>
-          </View>
-        </TouchableOpacity>
-      ) : (
-        <View style={styles.actionRow}>
-          <TouchableOpacity style={styles.acceptBtn} onPress={() => navigation.navigate('AttyMyAppointments')}>
-            <Check size={16} color="#9CA3AF" style={{marginRight: 4}} />
-            <Text style={styles.acceptBtnText}>ACCEPT</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.rescheduleBtn} onPress={() => navigation.navigate('AttyAvailabilityManager')}>
-            <Calendar size={16} color="#9CA3AF" style={{marginRight: 4}} />
-            <Text style={styles.rescheduleBtnText}>RESCHEDULE</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+  return {
+    date: value.toLocaleDateString(),
+    time: value.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}),
+  };
+}
 
-      {!isApproved && (
-        <TouchableOpacity style={styles.rejectBtn} onPress={() => navigation.navigate('AttyNotarialRequestRejected', { title: item.type, user: item.name })}>
-          <X size={16} color="#9CA3AF" style={{marginRight: 4}} />
-          <Text style={styles.rescheduleBtnText}>REJECT</Text>
-        </TouchableOpacity>
-      )}
+export default function AttyConsultationRequest({navigation}) {
+  const [appointments, setAppointments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState('pending');
 
-      {item.description ? (
-        <View style={styles.descriptionContainer}>
-          <Text style={styles.descriptionLabel}>BRIEF DESCRIPTION OF CONCERN</Text>
-          <View style={styles.descriptionBox}>
-            <Text style={styles.descriptionText}>{item.description}</Text>
-          </View>
-        </View>
-      ) : null}
-    </View>
+  const loadAppointments = useCallback(async () => {
+    try {
+      setLoading(true);
+      const rows = await getMyAppointments();
+      setAppointments(Array.isArray(rows) ? rows : []);
+    } catch (error) {
+      Alert.alert('Error', error?.message ?? 'Failed to load consultation requests.');
+      setAppointments([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadAppointments();
+  }, [loadAppointments]);
+
+  const pendingRows = useMemo(
+    () => appointments.filter(item => (item.status ?? '').toLowerCase() === 'pending'),
+    [appointments],
   );
-};
+  const confirmedRows = useMemo(
+    () => appointments.filter(item => (item.status ?? '').toLowerCase() === 'confirmed'),
+    [appointments],
+  );
 
-export default function App({ navigation }) {
+  const displayedRows = tab === 'pending' ? pendingRows : confirmedRows;
+
+  const handleUpdate = async (id, status) => {
+    try {
+      await updateAppointmentStatus(id, status);
+      await loadAppointments();
+    } catch (error) {
+      Alert.alert('Error', error?.message ?? 'Unable to update request.');
+    }
+  };
+
+  const renderRow = ({item}) => {
+    const status = (item.status ?? 'pending').toUpperCase();
+    const {date, time} = formatDateTime(item.scheduled_at);
+
+    return (
+      <View style={styles.card}>
+        <View style={styles.rowTop}>
+          <View>
+            <Text style={styles.clientName}>{item.client_name ?? 'Client'}</Text>
+            <Text style={styles.caseTitle}>{item.title ?? 'Consultation'}</Text>
+          </View>
+          <View style={styles.statusBadge}>
+            <Text style={styles.statusText}>{status}</Text>
+          </View>
+        </View>
+
+        <Text style={styles.metaText}>📅 {date}</Text>
+        <Text style={styles.metaText}>🕒 {time}</Text>
+        <Text style={styles.metaText}>📝 {item.notes || 'No details provided'}</Text>
+
+        {tab === 'pending' ? (
+          <View style={styles.actionRow}>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.rejectButton]}
+              onPress={() => handleUpdate(item.id, 'cancelled')}>
+              <Text style={styles.rejectText}>Reject</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.approveButton]}
+              onPress={() => handleUpdate(item.id, 'confirmed')}>
+              <Text style={styles.approveText}>Approve</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={styles.chatButton}
+            onPress={() =>
+              navigation.navigate('AttyConsultationMessage', {
+                chatId: item.id,
+                clientName: item.client_name ?? 'Client',
+                clientInitials: (item.client_name ?? 'Client')
+                  .split(' ')
+                  .filter(Boolean)
+                  .map(part => part[0])
+                  .join('')
+                  .slice(0, 2)
+                  .toUpperCase(),
+              })
+            }>
+            <Text style={styles.chatButtonText}>Open Chat</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginRight: 10 }}>
-          <Text style={{ fontSize: 24 }}>‹</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Text style={styles.backText}>‹</Text>
         </TouchableOpacity>
         <Text style={styles.title}>Consultation Requests</Text>
       </View>
 
-      <View style={styles.searchSection}>
-        <View style={styles.searchBar}>
-          <Search size={20} color="#9CA3AF" />
-          <TextInput 
-            placeholder="Search by client name or case type..." 
-            style={styles.searchInput}
-            placeholderTextColor="#9CA3AF"
-          />
+      <View style={styles.tabRow}>
+        <TouchableOpacity
+          style={[styles.tab, tab === 'pending' && styles.activeTab]}
+          onPress={() => setTab('pending')}>
+          <Text style={[styles.tabText, tab === 'pending' && styles.activeTabText]}>
+            Pending ({pendingRows.length})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, tab === 'confirmed' && styles.activeTab]}
+          onPress={() => setTab('confirmed')}>
+          <Text style={[styles.tabText, tab === 'confirmed' && styles.activeTabText]}>
+            Approved ({confirmedRows.length})
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {loading ? (
+        <View style={styles.emptyState}>
+          <ActivityIndicator color="#0F172A" />
+          <Text style={styles.emptyText}>Loading requests...</Text>
         </View>
-      </View>
-
-      <View style={styles.filterRow}>
-        <TouchableOpacity style={styles.filterBtn}>
-          <SlidersHorizontal size={18} color="#1F2937" />
-          <Text style={styles.filterBtnText}>FILTER</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.sortBtn}>
-          <Text style={styles.sortBtnText}>SORT BY DATE</Text>
-        </TouchableOpacity>
-      </View>
-
-      <FlatList
-        data={DATA}
-        renderItem={({ item }) => <ConsultationCard item={item} navigation={navigation} />}
-        keyExtractor={item => item.id}
-        contentContainerStyle={styles.listContent}
-      />
+      ) : displayedRows.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyText}>
+            {tab === 'pending' ? 'No pending consultation requests.' : 'No approved consultations yet.'}
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={displayedRows}
+          keyExtractor={item => item.id}
+          renderItem={renderRow}
+          contentContainerStyle={styles.listContent}
+        />
+      )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9FAFB' },
-  header: { padding: 20 },
-  title: { fontSize: 24, fontWeight: 'bold', color: '#111827', fontFamily: 'serif' },
-  searchSection: { paddingHorizontal: 20, marginBottom: 15 },
-  searchBar: {
+  container: {flex: 1, backgroundColor: '#F8FAFC'},
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF',
-    borderRadius: 12,
-    paddingHorizontal: 15,
-    height: 50,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    marginBottom: 14,
+  },
+  backText: {fontSize: 30, color: '#111827', marginRight: 8},
+  title: {fontSize: 24, fontWeight: '800', color: '#111827'},
+  tabRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    marginBottom: 14,
+    gap: 8,
+  },
+  tab: {
+    flex: 1,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#F3F4F6',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-  },
-  searchInput: { flex: 1, marginLeft: 10, fontSize: 16 },
-  filterRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    justifyContent: 'space-between',
-    marginBottom: 20,
-  },
-  filterBtn: {
-    flexDirection: 'row',
+    borderColor: '#CBD5E1',
+    paddingVertical: 10,
     alignItems: 'center',
-    backgroundColor: '#FFF',
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    width: '45%',
-    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
   },
-  filterBtnText: { marginLeft: 8, fontWeight: '600', color: '#1F2937' },
-  sortBtn: {
-    backgroundColor: '#111827',
-    paddingVertical: 12,
-    borderRadius: 8,
-    width: '50%',
-    alignItems: 'center',
+  activeTab: {
+    backgroundColor: '#0F172A',
+    borderColor: '#0F172A',
   },
-  sortBtnText: { color: '#FFF', fontWeight: 'bold', fontSize: 12 },
-  listContent: { paddingHorizontal: 20, paddingBottom: 20 },
+  tabText: {fontSize: 13, color: '#334155', fontWeight: '600'},
+  activeTabText: {color: '#FFFFFF'},
+  listContent: {paddingHorizontal: 16, paddingBottom: 24},
   card: {
-    backgroundColor: '#FFF',
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 20,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#F3F4F6',
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
+    borderColor: '#E2E8F0',
+    padding: 14,
+    marginBottom: 12,
   },
-  cardHeader: { flexDirection: 'row', marginBottom: 15 },
-  avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#EFF6FF',
-    justifyContent: 'center',
-    alignItems: 'center',
+  rowTop: {flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8},
+  clientName: {fontSize: 16, fontWeight: '700', color: '#0F172A'},
+  caseTitle: {fontSize: 13, color: '#64748B'},
+  statusBadge: {
+    backgroundColor: '#E2E8F0',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
   },
-  avatarText: { color: '#1E40AF', fontWeight: 'bold', fontSize: 18 },
-  headerInfo: { flex: 1, marginLeft: 15 },
-  nameRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  clientName: { fontSize: 18, fontWeight: 'bold', color: '#111827' },
-  statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
-  statusPending: { backgroundColor: '#FFF7ED' },
-  statusApproved: { backgroundColor: '#EEF2FF' },
-  statusText: { fontSize: 10, fontWeight: 'bold' },
-  textPending: { color: '#F97316' },
-  textApproved: { color: '#4F46E5' },
-  metaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
-  metaText: { color: '#6B7280', marginLeft: 6, fontSize: 14 },
-  dot: { width: 6, height: 6, borderRadius: 3, marginLeft: 10, marginRight: 6 },
-  paymentText: { fontSize: 11, fontWeight: 'bold' },
-  actionRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
-  acceptBtn: {
+  statusText: {fontSize: 10, fontWeight: '700', color: '#1E293B'},
+  metaText: {fontSize: 13, color: '#475569', marginBottom: 4},
+  actionRow: {flexDirection: 'row', marginTop: 10, gap: 8},
+  actionButton: {
     flex: 1,
-    flexDirection: 'row',
-    backgroundColor: '#F3F4F6',
-    padding: 12,
     borderRadius: 10,
-    marginRight: 10,
+    paddingVertical: 10,
     alignItems: 'center',
-    justifyContent: 'center',
   },
-  acceptBtnText: { color: '#9CA3AF', fontWeight: 'bold', fontSize: 12 },
-  rescheduleBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
-    padding: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rescheduleBtnText: { color: '#9CA3AF', fontWeight: 'bold', fontSize: 12 },
-  rejectBtn: {
+  rejectButton: {backgroundColor: '#FEE2E2'},
+  approveButton: {backgroundColor: '#DCFCE7'},
+  rejectText: {color: '#B91C1C', fontWeight: '700'},
+  approveText: {color: '#166534', fontWeight: '700'},
+  chatButton: {
     marginTop: 10,
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
-    padding: 12,
+    backgroundColor: '#0F172A',
     borderRadius: 10,
+    paddingVertical: 11,
     alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
   },
-  enterBtn: { backgroundColor: '#0F172A', padding: 15, borderRadius: 12, marginTop: 10 },
-  enterBtnText: { color: '#FFF', textAlign: 'center', fontWeight: 'bold', fontSize: 13 },
-  descriptionContainer: { marginTop: 20 },
-  descriptionLabel: { fontSize: 10, color: '#9CA3AF', fontWeight: 'bold', marginBottom: 8 },
-  descriptionBox: { backgroundColor: '#F9FAFB', borderRadius: 12, padding: 15 },
-  descriptionText: { color: '#374151', lineHeight: 20 },
+  chatButtonText: {color: '#FFFFFF', fontWeight: '700'},
+  emptyState: {flex: 1, alignItems: 'center', justifyContent: 'center'},
+  emptyText: {marginTop: 8, color: '#64748B'},
 });

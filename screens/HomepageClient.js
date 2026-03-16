@@ -1,6 +1,7 @@
-import React from 'react';
+import React, {useCallback, useEffect, useState} from 'react';
 import {
   Alert,
+  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
@@ -8,56 +9,98 @@ import {
   View,
 } from 'react-native';
 import {useUserProfile} from '../context/UserProfileContext';
+import {getMyAppointments} from '../services/appointmentService';
 
 const HomepageClient = ({navigation}) => {
   const {profile} = useUserProfile();
-  const appointments = [
-    {
-      title: 'Property Dispute',
-      attorney: 'ATTY. CLARA SANTOS',
-      type: 'Consultation',
-      date: '2026-02-24',
-      time: '10:00 AM',
-      law: 'CIVIL LAW',
-      status: 'Approved',
-      payment: true,
-    },
-    {
-      title: 'Property Title Verification',
-      attorney: 'ATTY. CLARA SANTOS',
-      type: 'Consultation',
-      date: '2026-02-24',
-      time: '1:00 PM',
-      law: 'CIVIL LAW',
-      status: 'Approved',
-      payment: true,
-    },
-    {
-      title: 'Deed of Sale Notarization',
-      attorney: 'ATTY. MARK REYES',
-      type: 'Notarial',
-      date: '2026-02-24',
-      time: '2:30 PM',
-      law: 'CORPORATE LAW',
-      status: 'Payment Confirmed',
-      payment: false,
-    },
-  ];
+  const [appointments, setAppointments] = useState([]);
+  const [loadingAppointments, setLoadingAppointments] = useState(true);
+
+  const loadAppointments = useCallback(async () => {
+    try {
+      setLoadingAppointments(true);
+      const records = await getMyAppointments();
+      setAppointments(Array.isArray(records) ? records : []);
+    } catch (error) {
+      Alert.alert('Error', error?.message ?? 'Failed to load appointments.');
+      setAppointments([]);
+    } finally {
+      setLoadingAppointments(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadAppointments();
+  }, [loadAppointments]);
 
   const handleMenu = () => navigation.navigate('ClientMenu');
   const handleNotifications = () => navigation.navigate('ClientNotification');
   const handleBookAppointment = () => navigation.navigate('BookAppointment');
   const handleNotarialService = () => navigation.navigate('ClientNotarial');
-  const handleFullHistory = () =>
-    Alert.alert('Full History', 'Showing full appointment history.');
-  const handlePayment = () =>
-    navigation.navigate('Payment', { serviceData: { type: 'Consultation', amount: '₱2,500' } });
+  const handleFullHistory = () => navigation.navigate('MyAppointments');
+  const handlePayment = appointment =>
+    navigation.navigate('Payment', {
+      paymentMethod: 'gcash',
+      serviceData: {
+        type: appointment?.title ?? 'Consultation',
+        amount: appointment?.amount
+          ? `₱${Number(appointment.amount).toLocaleString()}`
+          : '₱2,500',
+      },
+      paymentContext: {
+        sourceType: 'appointment',
+        sourceId: appointment?.id,
+      },
+    });
   const handleAppointmentDetails = () =>
     Alert.alert('Appointment Details', 'Opening appointment details.');
+  const handleCompletedPress = appointment => {
+    navigation.navigate('PaymentTranscript', {
+      transactionId: `BTMS-${String(appointment?.id || '').slice(0, 8).toUpperCase() || 'UNKNOWN'}`,
+      amount: appointment?.amount
+        ? `₱${Number(appointment.amount).toLocaleString()}`
+        : '₱2,500',
+      paymentContext: {
+        sourceType: 'appointment',
+        sourceId: appointment?.id,
+      },
+      serviceData: {
+        type: appointment?.title ?? 'Consultation',
+      },
+    });
+  };
   const handleChat = () =>
     navigation.navigate('Chatbot');
   const handleProfileSettings = () =>
     navigation.navigate('ProfileSettingsClient');
+
+  const formatDateTime = isoDateTime => {
+    if (!isoDateTime) {
+      return {date: 'No schedule', time: '--:--'};
+    }
+
+    const rawValue = String(isoDateTime).trim();
+    const normalizedValue = rawValue
+      .replace(' ', 'T')
+      .replace(/\+00$/, 'Z');
+
+    let dateValue = new Date(normalizedValue);
+    if (Number.isNaN(dateValue.getTime())) {
+      const localMatch = rawValue.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})(?::\d{2})?/);
+      if (localMatch) {
+        dateValue = new Date(`${localMatch[1]}T${localMatch[2]}:00`);
+      }
+    }
+
+    if (Number.isNaN(dateValue.getTime())) {
+      return {date: 'No schedule', time: '--:--'};
+    }
+
+    return {
+      date: dateValue.toLocaleDateString(),
+      time: dateValue.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}),
+    };
+  };
 
   const displayName = profile?.name?.trim() || 'Client';
   const initials = displayName
@@ -136,50 +179,79 @@ const HomepageClient = ({navigation}) => {
         </View>
 
         <View style={styles.appointmentList}>
-          {appointments.map((item, index) => (
-            <View key={index} style={styles.appointmentCard}>
+          {loadingAppointments ? (
+            <View style={styles.emptyStateCard}>
+              <ActivityIndicator size="small" color="#0F172A" />
+              <Text style={styles.emptyStateText}>Loading your appointments...</Text>
+            </View>
+          ) : appointments.length === 0 ? (
+            <View style={styles.emptyStateCard}>
+              <Text style={styles.emptyStateTitle}>No appointments yet</Text>
+              <Text style={styles.emptyStateText}>
+                Book your first consultation to see it here.
+              </Text>
+            </View>
+          ) : (
+            appointments.slice(0, 3).map(item => {
+              const {date, time} = formatDateTime(item.scheduled_at);
+              const status = (item.status ?? 'PENDING').toUpperCase();
+              const isConfirmed = status === 'CONFIRMED';
+              const isCompleted = status === 'COMPLETED';
+              const isRescheduled = status === 'RESCHEDULED';
+              return (
+                <View key={item.id} style={styles.appointmentCard}>
               <View style={styles.appointmentLeft}>
                 <View style={styles.appointmentDateBox}>
                   <Text style={styles.dateIcon}>📆</Text>
-                  <Text style={styles.appointmentDate}>{item.date}</Text>
+                  <Text style={styles.appointmentDate}>{date}</Text>
                 </View>
               </View>
 
               <View style={styles.appointmentRight}>
                 <View style={styles.appointmentHeader}>
-                  <Text style={styles.appointmentTitle}>{item.title}</Text>
+                  <Text style={styles.appointmentTitle}>{item.title ?? 'Consultation'}</Text>
                   <View style={styles.statusBadge}>
-                    <Text style={styles.statusText}>{item.status}</Text>
+                    <Text style={styles.statusText}>{status}</Text>
                   </View>
                 </View>
 
                 <Text style={styles.appointmentInfo}>
-                  {item.attorney} • {item.law}
+                  {item.attorney_name ?? 'Attorney not assigned'}
                 </Text>
 
                 <View style={styles.appointmentDetails}>
                   <View style={styles.detailItem}>
                     <Text style={styles.detailIcon}>🕐</Text>
-                    <Text style={styles.detailText}>{item.time}</Text>
+                    <Text style={styles.detailText}>{time}</Text>
                   </View>
                   <View style={styles.detailItem}>
                     <Text style={styles.detailIcon}>⭕</Text>
-                    <Text style={styles.detailText}>{item.type}</Text>
+                    <Text style={styles.detailText}>Consultation</Text>
                   </View>
                 </View>
 
                 <View style={styles.appointmentActions}>
-                  {item.payment ? (
+                  {isConfirmed ? (
                     <TouchableOpacity
                       style={styles.paymentButton}
-                      onPress={handlePayment}>
+                      onPress={() => handlePayment(item)}>
                       <Text style={styles.paymentIcon}>💳</Text>
                       <Text style={styles.paymentText}>Proceed to Payment</Text>
                     </TouchableOpacity>
-                  ) : (
-                    <View style={styles.confirmedBadge}>
+                  ) : isRescheduled ? (
+                    <View style={styles.rescheduledBadge}>
+                      <Text style={styles.rescheduledBadgeText}>Rescheduled</Text>
+                    </View>
+                  ) : isCompleted ? (
+                    <TouchableOpacity
+                      style={styles.confirmedBadge}
+                      onPress={() => handleCompletedPress(item)}>
                       <Text style={styles.confirmedIcon}>✓</Text>
-                      <Text style={styles.confirmedText}>Confirmed</Text>
+                      <Text style={styles.confirmedText}>Completed</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <View style={styles.pendingBadgeInline}>
+                      <Text style={styles.pendingBadgeInlineText}>Awaiting approval</Text>
                     </View>
                   )}
 
@@ -191,7 +263,9 @@ const HomepageClient = ({navigation}) => {
                 </View>
               </View>
             </View>
-          ))}
+              );
+            })
+          )}
         </View>
       </ScrollView>
 
@@ -287,6 +361,16 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     shadowOffset: {width: 0, height: 5},
   },
+  emptyStateCard: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  emptyStateTitle: {fontSize: 16, fontWeight: '700', color: '#0F172A', marginBottom: 4},
+  emptyStateText: {fontSize: 13, color: '#64748B', textAlign: 'center'},
   appointmentLeft: {marginRight: 12},
   appointmentDateBox: {
     width: 64,
@@ -347,6 +431,24 @@ const styles = StyleSheet.create({
   },
   confirmedIcon: {fontSize: 16, color: '#059669', fontWeight: '700'},
   confirmedText: {color: '#059669', fontWeight: '700', fontSize: 12},
+  pendingBadgeInline: {
+    flex: 1,
+    backgroundColor: '#FEF3C7',
+    paddingVertical: 12,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pendingBadgeInlineText: {color: '#92400E', fontWeight: '700', fontSize: 12},
+  rescheduledBadge: {
+    flex: 1,
+    backgroundColor: '#DBEAFE',
+    paddingVertical: 12,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  rescheduledBadgeText: {color: '#1D4ED8', fontWeight: '700', fontSize: 12},
   arrowButton: {
     width: 48,
     height: 48,

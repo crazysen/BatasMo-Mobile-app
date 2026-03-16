@@ -1,17 +1,69 @@
-import React, { useState, useMemo } from 'react';
-import { StyleSheet, View, Text, TextInput, TouchableOpacity, FlatList, Alert } from 'react-native';
+import React, {useCallback, useEffect, useMemo, useState} from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import {getMyAppointments} from '../services/appointmentService';
 
 const MessagesHub = ({ navigation }) => {
   // State for search query
   const [searchQuery, setSearchQuery] = useState('');
   
-  // Sample chat data - this would come from API/database in production
-  const chatData = [
-    { id: '1', name: 'Atty. Clara Santos', msg: 'The documents are ready fo...', time: '10:45 AM', initials: 'CS', unread: 2 },
-    { id: '2', name: 'Support Desk', msg: 'Ticket #421 has been resolved.', time: 'YESTERDAY', initials: 'SD' },
-    { id: '3', name: 'Atty. Mark Reyes', msg: 'Please confirm our call schedule.', time: '2 DAYS AGO', initials: 'MR' },
-  ];
+  const [appointments, setAppointments] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadAppointments = useCallback(async () => {
+    try {
+      setLoading(true);
+      const rows = await getMyAppointments();
+      setAppointments(Array.isArray(rows) ? rows : []);
+    } catch (error) {
+      Alert.alert('Error', error?.message ?? 'Failed to load messages.');
+      setAppointments([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadAppointments();
+  }, [loadAppointments]);
+
+  const chatData = useMemo(
+    () =>
+      appointments
+        .filter(item => {
+          const status = (item.status ?? '').toLowerCase();
+          return status === 'confirmed' || status === 'completed';
+        })
+        .map(item => {
+          const name = item.attorney_name || 'Attorney';
+          return {
+            id: item.id,
+            name,
+            msg: item.notes || `Consultation: ${item.title || 'Legal Service'}`,
+            time: item.updated_at
+              ? new Date(item.updated_at).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})
+              : 'NOW',
+            initials: name
+              .split(' ')
+              .filter(Boolean)
+              .map(part => part[0])
+              .join('')
+              .slice(0, 2)
+              .toUpperCase(),
+            unread: 0,
+          };
+        }),
+    [appointments],
+  );
 
   // Filter chat data based on search query
   const filteredChatData = useMemo(() => {
@@ -106,17 +158,24 @@ const MessagesHub = ({ navigation }) => {
         )}
       </View>
 
-      <FlatList
-        data={filteredChatData}
-        renderItem={({ item }) => <ChatItem item={item} />}
-        keyExtractor={item => item.id}
-        contentContainerStyle={{ padding: 16 }}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No messages found</Text>
-          </View>
-        }
-      />
+      {loading ? (
+        <View style={styles.emptyContainer}>
+          <ActivityIndicator color="#EAB308" />
+          <Text style={styles.emptyText}>Loading conversations...</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={filteredChatData}
+          renderItem={({ item }) => <ChatItem item={item} />}
+          keyExtractor={item => item.id}
+          contentContainerStyle={{ padding: 16 }}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No confirmed consultations to chat yet</Text>
+            </View>
+          }
+        />
+      )}
     </SafeAreaView>
   );
 };

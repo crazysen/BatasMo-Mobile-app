@@ -1,5 +1,6 @@
 import React, {useEffect, useState} from 'react';
 import {
+  ActivityIndicator,
   Alert,
   ScrollView,
   StyleSheet,
@@ -10,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {useUserProfile} from '../context/UserProfileContext';
+import {getMyProfile, updateMyProfile} from '../services/profileService';
 
 const ProfileSettingsClient = ({navigation}) => {
   const {profile, updateProfile} = useUserProfile();
@@ -17,22 +19,44 @@ const ProfileSettingsClient = ({navigation}) => {
   const [email, setEmail] = useState(profile.email);
   const [phone, setPhone] = useState(profile.phone);
   const [address, setAddress] = useState(profile.address);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    setName(profile.name);
-    setEmail(profile.email);
-    setPhone(profile.phone);
-    setAddress(profile.address);
-  }, [profile]);
+    const loadProfile = async () => {
+      try {
+        setLoading(true);
+        const data = await getMyProfile();
+        const resolvedName = data?.full_name ?? profile.name;
+        const resolvedEmail = data?.email ?? profile.email;
+        const resolvedPhone = data?.phone ?? profile.phone;
+        const resolvedAddress = data?.address ?? profile.address;
 
-  const handleSave = () => {
+        setName(resolvedName || '');
+        setEmail(resolvedEmail || '');
+        setPhone(resolvedPhone || '');
+        setAddress(resolvedAddress || '');
+
+        updateProfile({
+          name: resolvedName || '',
+          email: resolvedEmail || '',
+          phone: resolvedPhone || '',
+          address: resolvedAddress || '',
+          role: (data?.role || profile.role || 'client').toLowerCase() === 'attorney' ? 'Attorney' : 'Client',
+        });
+      } catch (error) {
+        Alert.alert('Error', error?.message ?? 'Failed to load profile.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadProfile();
+  }, []);
+
+  const handleSave = async () => {
     if (!name.trim()) {
       Alert.alert('Error', 'Full name is required.');
-      return;
-    }
-
-    if (!email.trim() || !email.includes('@') || !email.includes('.')) {
-      Alert.alert('Error', 'Please enter a valid email address.');
       return;
     }
 
@@ -46,14 +70,29 @@ const ProfileSettingsClient = ({navigation}) => {
       return;
     }
 
-    updateProfile({
-      name: name.trim(),
-      email: email.trim(),
-      phone: phone.trim(),
-      address: address.trim(),
-    });
+    try {
+      setSaving(true);
+      const updated = await updateMyProfile({
+        full_name: name.trim(),
+        phone: phone.trim(),
+        address: address.trim(),
+        role: 'client',
+      });
 
-    Alert.alert('Saved', 'Profile settings updated.');
+      updateProfile({
+        name: updated?.full_name ?? name.trim(),
+        email: updated?.email ?? email.trim(),
+        phone: updated?.phone ?? phone.trim(),
+        address: updated?.address ?? address.trim(),
+        role: 'Client',
+      });
+
+      Alert.alert('Saved', 'Profile settings updated.');
+    } catch (error) {
+      Alert.alert('Error', error?.message ?? 'Unable to save profile settings.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleCancel = () => {
@@ -82,6 +121,13 @@ const ProfileSettingsClient = ({navigation}) => {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {loading ? (
+          <View style={styles.loadingCard}>
+            <ActivityIndicator color="#0F172A" />
+            <Text style={styles.loadingText}>Loading profile...</Text>
+          </View>
+        ) : null}
+
         <View style={styles.card}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>{initials}</Text>
@@ -103,9 +149,9 @@ const ProfileSettingsClient = ({navigation}) => {
 
           <Text style={styles.label}>Email Address</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, styles.disabledInput]}
             value={email}
-            onChangeText={setEmail}
+            editable={false}
             keyboardType="email-address"
             autoCapitalize="none"
             placeholder="name@domain.com"
@@ -130,8 +176,8 @@ const ProfileSettingsClient = ({navigation}) => {
           />
 
           <View style={styles.buttonRow}>
-            <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-              <Text style={styles.saveButtonText}>Save Changes</Text>
+            <TouchableOpacity style={styles.saveButton} onPress={handleSave} disabled={saving || loading}>
+              <Text style={styles.saveButtonText}>{saving ? 'Saving...' : 'Save Changes'}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
               <Text style={styles.cancelButtonText}>Cancel</Text>
@@ -177,6 +223,18 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 40,
   },
+  loadingCard: {
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    marginBottom: 12,
+    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  loadingText: {fontSize: 13, color: '#64748B'},
   card: {
     backgroundColor: '#FFFFFF',
     borderRadius: 18,
@@ -236,6 +294,10 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     marginBottom: 14,
     color: '#0F1E36',
+  },
+  disabledInput: {
+    backgroundColor: '#EEF2F7',
+    color: '#64748B',
   },
   multilineInput: {
     minHeight: 82,

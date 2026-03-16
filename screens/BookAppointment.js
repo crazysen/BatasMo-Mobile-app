@@ -1,5 +1,7 @@
-import React from 'react';
+import React, {useCallback, useEffect, useState} from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   StyleSheet,
@@ -8,36 +10,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-const attorneys = [
-  {
-    id: '1',
-    name: 'Dr. Sarah Johnson',
-    specialty: 'Corporate Law',
-    experience: '15 years experience',
-    rating: '4.9',
-    price: '₱2,500.00',
-    image: 'https://i.pravatar.cc/150?u=sarah',
-  },
-  {
-    id: '2',
-    name: 'Mr. Michael Chen',
-    specialty: 'Family Law',
-    experience: '12 years experience',
-    rating: '4.8',
-    price: '₱2,500.00',
-    image: 'https://i.pravatar.cc/150?u=michael',
-  },
-  {
-    id: '3',
-    name: 'Ms. Emily Rodriguez',
-    specialty: 'Criminal Law',
-    experience: '10 years experience',
-    rating: '4.9',
-    price: '₱2,500.00',
-    image: 'https://i.pravatar.cc/150?u=emily',
-  },
-];
+import {getAttorneys} from '../services/attorneyService';
 
 const AttorneyCard = ({item, navigation}) => (
   <View style={styles.card}>
@@ -71,12 +44,9 @@ const AttorneyCard = ({item, navigation}) => (
         style={styles.profileButton}
         onPress={() => navigation.navigate('AttorneyProfile', { 
           attorney: {
-            name: item.name,
-            specialty: item.specialty,
-            rating: item.rating,
+            ...item,
             reviews: '128',
-            image: item.image
-          }
+          },
         })}>
         <Text style={styles.profileButtonText}>View Profile</Text>
       </TouchableOpacity>
@@ -85,6 +55,42 @@ const AttorneyCard = ({item, navigation}) => (
 );
 
 export default function BookAppointment({navigation}) {
+  const [attorneys, setAttorneys] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadAttorneys = useCallback(async () => {
+    try {
+      setLoading(true);
+      const records = await getAttorneys();
+      const mapped = (Array.isArray(records) ? records : []).map(record => ({
+        id: record.id,
+        name: record.full_name || record.email || 'Attorney',
+        specialty: record.specialties || 'General Practice',
+        experience: record.years_experience
+          ? `${record.years_experience} years experience`
+          : 'Experience not set',
+        rating: '4.9',
+        price: record.consultation_fee
+          ? `₱${Number(record.consultation_fee).toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}`
+          : '₱2,500.00',
+        image: record.avatar_url || `https://i.pravatar.cc/150?u=${encodeURIComponent(record.email || record.id)}`,
+      }));
+      setAttorneys(mapped);
+    } catch (error) {
+      Alert.alert('Error', error?.message ?? 'Failed to load attorneys.');
+      setAttorneys([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadAttorneys();
+  }, [loadAttorneys]);
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -100,13 +106,24 @@ export default function BookAppointment({navigation}) {
         </View>
       </View>
 
-      <FlatList
-        data={attorneys}
-        keyExtractor={item => item.id}
-        renderItem={({item}) => <AttorneyCard item={item} navigation={navigation} />}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-      />
+      {loading ? (
+        <View style={styles.emptyContainer}>
+          <ActivityIndicator color="#0F172A" />
+          <Text style={styles.emptyText}>Loading attorney directory...</Text>
+        </View>
+      ) : attorneys.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>No attorneys found yet.</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={attorneys}
+          keyExtractor={item => item.id}
+          renderItem={({item}) => <AttorneyCard item={item} navigation={navigation} />}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -147,6 +164,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 20,
   },
+  emptyContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  emptyText: {marginTop: 8, color: '#64748B', fontSize: 14, textAlign: 'center'},
   card: {
     backgroundColor: '#FFF',
     borderRadius: 24,

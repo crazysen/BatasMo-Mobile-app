@@ -1,210 +1,403 @@
-import React from 'react';
+import React, {useEffect, useState} from 'react';
 import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  ScrollView,
   StyleSheet,
   Text,
-  View,
-  ScrollView,
-  Image,
+  TextInput,
   TouchableOpacity,
-  StatusBar,
+  View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import {SafeAreaView} from 'react-native-safe-area-context';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system/legacy';
+import {useUserProfile} from '../context/UserProfileContext';
+import {getMyProfile, updateMyProfile} from '../services/profileService';
 
-const ChevronLeft = (props) => <MaterialCommunityIcons name="chevron-left" {...props} />;
-const Camera = (props) => <MaterialCommunityIcons name="camera" {...props} />;
-const Edit3 = (props) => <MaterialCommunityIcons name="pencil" {...props} />;
-const Mail = (props) => <MaterialCommunityIcons name="email" {...props} />;
-const Phone = (props) => <MaterialCommunityIcons name="phone" {...props} />;
-const MapPin = (props) => <MaterialCommunityIcons name="map-marker" {...props} />;
-const Briefcase = (props) => <MaterialCommunityIcons name="briefcase" {...props} />;
-const FileText = (props) => <MaterialCommunityIcons name="file-document" {...props} />;
-const CheckCircle2 = (props) => <MaterialCommunityIcons name="check-circle" {...props} />;
-const UploadCloud = (props) => <MaterialCommunityIcons name="cloud-upload" {...props} />;
-const Plus = (props) => <MaterialCommunityIcons name="plus" {...props} />;
+export default function AttyProfileSettings({navigation}) {
+  const {updateProfile} = useUserProfile();
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-const SpecializationTag = ({ label, isAdd = false }) => (
-  <TouchableOpacity style={[styles.tag, isAdd && styles.addTag]}>
-    {isAdd && <Plus size={14} color="#64748B" style={{marginRight: 4}} />}
-    <Text style={[styles.tagText, isAdd && styles.addTagText]}>{label}</Text>
-  </TouchableOpacity>
-);
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [address, setAddress] = useState('');
+  const [firmName, setFirmName] = useState('');
+  const [yearsExperience, setYearsExperience] = useState('');
+  const [specialties, setSpecialties] = useState('');
+  const [bio, setBio] = useState('');
+  const [consultationFee, setConsultationFee] = useState('');
 
-const DocRow = ({ title, size }) => (
-  <View style={styles.docCard}>
-    <View style={styles.docIconContainer}>
-      <FileText size={20} color="#1E3A8A" />
-    </View>
-    <View style={{ flex: 1, marginLeft: 12 }}>
-      <Text style={styles.docTitle}>{title}</Text>
-      <Text style={styles.docSize}>{size}</Text>
-    </View>
-    <CheckCircle2 size={20} color="#22C55E" />
-  </View>
-);
+  const [profileImage, setProfileImage] = useState(null);
+  const [currentAvatarUrl, setCurrentAvatarUrl] = useState('');
+  const [credentialDoc, setCredentialDoc] = useState(null);
+  const [existingCredentialUrl, setExistingCredentialUrl] = useState(null);
 
-export default function ProfileSettings({ navigation }) {
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        setLoading(true);
+        const data = await getMyProfile();
+        const attorney = data?.attorney_profile || {};
+
+        setFullName(data?.full_name || '');
+        setEmail(data?.email || '');
+        setPhone(data?.phone || '');
+        setAddress(data?.address || '');
+        setFirmName(attorney?.firm_name || '');
+        setYearsExperience(
+          attorney?.years_experience !== null && attorney?.years_experience !== undefined
+            ? String(attorney.years_experience)
+            : '',
+        );
+        setSpecialties(attorney?.specialties || '');
+        setBio(attorney?.bio || '');
+        setConsultationFee(
+          attorney?.consultation_fee !== null && attorney?.consultation_fee !== undefined
+            ? String(attorney.consultation_fee)
+            : '',
+        );
+        setCurrentAvatarUrl(data?.avatar_url || '');
+        setExistingCredentialUrl(data?.credential_document_url || null);
+
+        updateProfile({
+          name: data?.full_name || '',
+          email: data?.email || '',
+          phone: data?.phone || '',
+          address: data?.address || '',
+          role: 'Attorney',
+        });
+      } catch (error) {
+        Alert.alert('Error', error?.message ?? 'Failed to load attorney profile.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadProfile();
+  }, [updateProfile]);
+
+  const pickProfileImage = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['image/*'],
+        copyToCacheDirectory: true,
+      });
+      if (!result.canceled) {
+        setProfileImage(result.assets?.[0] ?? null);
+      }
+    } catch (error) {
+      Alert.alert('Error', error?.message ?? 'Unable to pick image.');
+    }
+  };
+
+  const pickCredentialDocument = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf', 'image/*'],
+        copyToCacheDirectory: true,
+      });
+      if (!result.canceled) {
+        setCredentialDoc(result.assets?.[0] ?? null);
+      }
+    } catch (error) {
+      Alert.alert('Error', error?.message ?? 'Unable to pick credential document.');
+    }
+  };
+
+  const handleSave = async () => {
+    if (!fullName.trim()) {
+      Alert.alert('Error', 'Full name is required.');
+      return;
+    }
+
+    try {
+      setSaving(true);
+
+      let avatarBase64 = null;
+      if (profileImage?.uri) {
+        avatarBase64 = await FileSystem.readAsStringAsync(profileImage.uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+      }
+
+      let credentialBase64 = null;
+      if (credentialDoc?.uri) {
+        credentialBase64 = await FileSystem.readAsStringAsync(credentialDoc.uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+      }
+
+      const updated = await updateMyProfile({
+        full_name: fullName.trim(),
+        phone: phone.trim() || null,
+        address: address.trim() || null,
+        role: 'attorney',
+        firm_name: firmName.trim() || null,
+        years_experience: yearsExperience ? Number(yearsExperience) : null,
+        specialties: specialties.trim() || null,
+        bio: bio.trim() || null,
+        consultation_fee: consultationFee ? Number(consultationFee) : null,
+        avatar_base64: avatarBase64,
+        avatar_name: profileImage?.name || null,
+        credential_document_base64: credentialBase64,
+        credential_document_name: credentialDoc?.name || null,
+      });
+
+      setCurrentAvatarUrl(updated?.avatar_url || currentAvatarUrl);
+      setExistingCredentialUrl(updated?.credential_document_url || existingCredentialUrl);
+
+      updateProfile({
+        name: updated?.full_name || fullName.trim(),
+        email: updated?.email || email.trim(),
+        phone: updated?.phone || phone.trim(),
+        address: updated?.address || address.trim(),
+        role: 'Attorney',
+      });
+
+      Alert.alert('Saved', 'Attorney profile updated successfully.');
+    } catch (error) {
+      Alert.alert('Error', error?.message ?? 'Unable to save attorney profile.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
-      
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <ChevronLeft size={28} color="#1E3A8A" />
+          <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
-        <View style={{ marginLeft: 15 }}>
-          <Text style={styles.title}>Profile Settings</Text>
-          <Text style={styles.networkSub}>BATASMO PROFESSIONAL NETWORK</Text>
-        </View>
+        <Text style={styles.title}>Attorney Profile Settings</Text>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Banner and Profile Header */}
-        <View style={styles.banner} />
-        <View style={styles.profileSection}>
-          <View style={styles.avatarWrapper}>
-            <Image 
-              source={{ uri: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=200&h=200' }} 
-              style={styles.avatar} 
-            />
-            <TouchableOpacity style={styles.cameraBtn}>
-              <Camera size={14} color="#1E3A8A" />
-            </TouchableOpacity>
+      <ScrollView contentContainerStyle={styles.content}>
+        {loading ? (
+          <View style={styles.loadingCard}>
+            <ActivityIndicator color="#0F172A" />
+            <Text style={styles.loadingText}>Loading profile...</Text>
           </View>
-          
-          <TouchableOpacity style={styles.editBtn}>
-            <Edit3 size={16} color="#FFF" />
-            <Text style={styles.editBtnText}>Edit Profile</Text>
-          </TouchableOpacity>
+        ) : null}
 
-          <Text style={styles.userName}>Atty. Julianne Smith</Text>
-          <View style={styles.verifiedBadge}>
-            <Text style={styles.verifiedText}>Verified</Text>
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Identity</Text>
+
+          <Text style={styles.label}>Full Name</Text>
+          <TextInput style={styles.input} value={fullName} onChangeText={setFullName} />
+
+          <Text style={styles.label}>Email</Text>
+          <TextInput
+            style={[styles.input, styles.disabledInput]}
+            value={email}
+            editable={false}
+            autoCapitalize="none"
+            keyboardType="email-address"
+          />
+
+          <Text style={styles.label}>Phone</Text>
+          <TextInput style={styles.input} value={phone} onChangeText={setPhone} />
+
+          <Text style={styles.label}>Office Address</Text>
+          <TextInput
+            style={[styles.input, styles.multiline]}
+            value={address}
+            onChangeText={setAddress}
+            multiline
+          />
+
+          <View style={styles.avatarPreviewBox}>
+            {profileImage?.uri || currentAvatarUrl ? (
+              <Image
+                source={{uri: profileImage?.uri || currentAvatarUrl}}
+                style={styles.avatarPreview}
+              />
+            ) : (
+              <View style={styles.avatarPlaceholder}>
+                <Text style={styles.avatarPlaceholderText}>No image</Text>
+              </View>
+            )}
+            <Text style={styles.hintText}>
+              {profileImage?.name
+                ? `Selected: ${profileImage.name}`
+                : currentAvatarUrl
+                  ? 'Current profile image'
+                  : 'Upload an attorney profile image'}
+            </Text>
           </View>
-          <Text style={styles.bioText}>
-            Senior Partner at BatasMo Chambers. Specialized in Civil Litigation and Corporate Law with over 12 years of courtroom experience.
-          </Text>
-        </View>
 
-        {/* Contact Information */}
-        <View style={styles.sectionCard}>
-          <View style={styles.sectionHeader}>
-            <Mail size={18} color="#F59E0B" fill="#F59E0B" />
-            <Text style={styles.sectionTitle}>Contact Information</Text>
-          </View>
-          
-          <Text style={styles.fieldLabel}>EMAIL ADDRESS</Text>
-          <Text style={styles.fieldValue}>j.smith@batasmo.com</Text>
-
-          <Text style={styles.fieldLabel}>PHONE NUMBER</Text>
-          <Text style={styles.fieldValue}>+63 917 123 4567</Text>
-
-          <Text style={styles.fieldLabel}>OFFICE ADDRESS</Text>
-          <Text style={styles.fieldValue}>Level 24, Premium Law Tower, BGC, Taguig City</Text>
-        </View>
-
-        {/* Professional Info */}
-        <View style={styles.sectionCard}>
-          <View style={styles.sectionHeader}>
-            <Briefcase size={18} color="#F59E0B" fill="#F59E0B" />
-            <Text style={styles.sectionTitle}>Professional Info</Text>
-          </View>
-          
-          <Text style={styles.fieldLabel}>CONSULTATION FEE</Text>
-          <Text style={styles.fieldValue}>₱2,500.00 / hour</Text>
-
-          <Text style={styles.fieldLabel}>YEARS OF PRACTICE</Text>
-          <Text style={styles.fieldValue}>12 Years</Text>
-        </View>
-
-        {/* Legal Specializations */}
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitleAlt}>Legal Specializations</Text>
-          <View style={styles.tagContainer}>
-            <SpecializationTag label="Civil Litigation" />
-            <SpecializationTag label="Corporate Law" />
-            <SpecializationTag label="Family Law" />
-            <SpecializationTag label="Estate Planning" />
-            <SpecializationTag label="Intellectual Property" />
-            <SpecializationTag label="Add Specialty" isAdd />
-          </View>
-        </View>
-
-        {/* Verification Documents */}
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitleAlt}>Verification Documents</Text>
-          <DocRow title="IBP Identification Card" size="2.4 MB" />
-          <DocRow title="Certificate of Good Standing" size="1.8 MB" />
-          
-          <TouchableOpacity style={styles.uploadBtn}>
-            <UploadCloud size={18} color="#64748B" />
-            <Text style={styles.uploadBtnText}>Upload New Credentials</Text>
+          <TouchableOpacity style={styles.uploadButton} onPress={pickProfileImage}>
+            <Text style={styles.uploadButtonText}>
+              {profileImage?.name ? `Image: ${profileImage.name}` : 'Upload Profile Image'}
+            </Text>
           </TouchableOpacity>
         </View>
-        
-        <View style={{ height: 40 }} />
+
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Professional Details</Text>
+
+          <Text style={styles.label}>Law Firm</Text>
+          <TextInput style={styles.input} value={firmName} onChangeText={setFirmName} />
+
+          <Text style={styles.label}>Years of Experience</Text>
+          <TextInput
+            style={styles.input}
+            value={yearsExperience}
+            onChangeText={setYearsExperience}
+            keyboardType="numeric"
+          />
+
+          <Text style={styles.label}>Specialties</Text>
+          <TextInput
+            style={styles.input}
+            value={specialties}
+            onChangeText={setSpecialties}
+            placeholder="Civil Law, Family Law"
+          />
+
+          <Text style={styles.label}>Consultation Fee</Text>
+          <TextInput
+            style={styles.input}
+            value={consultationFee}
+            onChangeText={setConsultationFee}
+            keyboardType="decimal-pad"
+            placeholder="2500"
+          />
+
+          <Text style={styles.label}>Bio</Text>
+          <TextInput
+            style={[styles.input, styles.multiline]}
+            value={bio}
+            onChangeText={setBio}
+            multiline
+          />
+
+          <TouchableOpacity style={styles.uploadButton} onPress={pickCredentialDocument}>
+            <Text style={styles.uploadButtonText}>
+              {credentialDoc?.name
+                ? `Credential: ${credentialDoc.name}`
+                : existingCredentialUrl
+                  ? 'Replace Credential Document'
+                  : 'Upload Credential Document'}
+            </Text>
+          </TouchableOpacity>
+
+          {existingCredentialUrl ? (
+            <Text style={styles.hintText}>Saved credential: {existingCredentialUrl}</Text>
+          ) : null}
+        </View>
+
+        <TouchableOpacity
+          style={[styles.saveButton, (saving || loading) && styles.disabledButton]}
+          onPress={handleSave}
+          disabled={saving || loading}>
+          <Text style={styles.saveButtonText}>{saving ? 'Saving...' : 'Save Changes'}</Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
-  header: { flexDirection: 'row', alignItems: 'center', padding: 20, backgroundColor: '#FFF' },
-  title: { fontSize: 22, fontWeight: 'bold', color: '#1E3A8A' },
-  networkSub: { fontSize: 10, color: '#94A3B8', letterSpacing: 1, marginTop: 2 },
-  
-  banner: { height: 100, backgroundColor: '#0F172A' },
-  profileSection: { 
-    backgroundColor: '#FFF', 
-    marginHorizontal: 20, 
-    borderRadius: 24, 
-    marginTop: -40, 
-    padding: 20,
-    alignItems: 'flex-start',
-    elevation: 4, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10,
+  container: {flex: 1, backgroundColor: '#F8FAFC'},
+  header: {
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
   },
-  avatarWrapper: { position: 'relative', marginTop: -60 },
-  avatar: { width: 100, height: 100, borderRadius: 20, borderWidth: 4, borderColor: '#FFF' },
-  cameraBtn: { 
-    position: 'absolute', bottom: -5, right: -5, 
-    backgroundColor: '#FFF', padding: 6, borderRadius: 15,
-    borderWidth: 1, borderColor: '#E2E8F0'
+  backText: {color: '#EAB308', fontWeight: '700', fontSize: 16, marginBottom: 6},
+  title: {fontSize: 24, fontWeight: '800', color: '#0F172A'},
+  content: {padding: 20, paddingBottom: 32},
+  loadingCard: {
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
   },
-  editBtn: { 
-    flexDirection: 'row', alignSelf: 'flex-end', 
-    backgroundColor: '#0F172A', paddingVertical: 8, paddingHorizontal: 16, 
-    borderRadius: 10, marginTop: -40 
+  loadingText: {fontSize: 13, color: '#64748B'},
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
-  editBtnText: { color: '#FFF', fontWeight: 'bold', marginLeft: 6, fontSize: 13 },
-  userName: { fontSize: 22, fontWeight: 'bold', color: '#1E3A8A', marginTop: 15 },
-  verifiedBadge: { backgroundColor: '#BBF7D0', paddingHorizontal: 10, paddingVertical: 2, borderRadius: 6, marginTop: 8 },
-  verifiedText: { color: '#166534', fontSize: 12, fontWeight: '500' },
-  bioText: { color: '#64748B', lineHeight: 20, marginTop: 12, fontSize: 14 },
-
-  sectionCard: { backgroundColor: '#FFF', marginHorizontal: 20, borderRadius: 24, padding: 20, marginTop: 16 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#1E3A8A', marginLeft: 10 },
-  sectionTitleAlt: { fontSize: 18, fontWeight: 'bold', color: '#1E3A8A', marginBottom: 15 },
-  
-  fieldLabel: { fontSize: 10, color: '#94A3B8', fontWeight: 'bold', marginTop: 15 },
-  fieldValue: { fontSize: 15, color: '#1E3A8A', fontWeight: '500', marginTop: 4 },
-
-  tagContainer: { flexDirection: 'row', flexWrap: 'wrap' },
-  tag: { backgroundColor: '#F1F5F9', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, marginRight: 8, marginBottom: 8 },
-  tagText: { color: '#1E3A8A', fontWeight: '500', fontSize: 13 },
-  addTag: { backgroundColor: '#FFF', borderStyle: 'dashed', borderWidth: 1, borderColor: '#CBD5E1', flexDirection: 'row', alignItems: 'center' },
-  addTagText: { color: '#64748B' },
-
-  docCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', padding: 15, borderRadius: 16, marginBottom: 12 },
-  docIconContainer: { width: 40, height: 40, backgroundColor: '#FFF', borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
-  docTitle: { fontSize: 15, fontWeight: 'bold', color: '#1E3A8A' },
-  docSize: { fontSize: 12, color: '#94A3B8', marginTop: 2 },
-  
-  uploadBtn: { 
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', 
-    padding: 15, borderStyle: 'dashed', borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 16, marginTop: 8 
+  sectionTitle: {fontSize: 18, fontWeight: '700', color: '#0F172A', marginBottom: 10},
+  label: {fontSize: 13, fontWeight: '600', color: '#475569', marginBottom: 6, marginTop: 10},
+  input: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: '#0F172A',
   },
-  uploadBtnText: { color: '#64748B', fontWeight: 'bold', marginLeft: 8 }
+  disabledInput: {
+    backgroundColor: '#EEF2F7',
+    color: '#64748B',
+  },
+  multiline: {minHeight: 84, textAlignVertical: 'top'},
+  uploadButton: {
+    marginTop: 14,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderStyle: 'dashed',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+  },
+  uploadButtonText: {fontWeight: '700', color: '#334155', fontSize: 13},
+  hintText: {fontSize: 12, color: '#64748B', marginTop: 8},
+  avatarPreviewBox: {
+    marginTop: 12,
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  avatarPreview: {
+    width: 92,
+    height: 92,
+    borderRadius: 46,
+    borderWidth: 2,
+    borderColor: '#CBD5E1',
+  },
+  avatarPlaceholder: {
+    width: 92,
+    height: 92,
+    borderRadius: 46,
+    backgroundColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarPlaceholderText: {
+    color: '#64748B',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  saveButton: {
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#0F172A',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  disabledButton: {opacity: 0.7},
+  saveButtonText: {color: '#FFFFFF', fontWeight: '700', fontSize: 16},
 });

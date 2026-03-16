@@ -1,5 +1,6 @@
-import React, {useState} from 'react';
+import React, {useCallback, useEffect, useState} from 'react';
 import {
+  ActivityIndicator,
   Alert,
   ScrollView,
   StyleSheet,
@@ -8,10 +9,35 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import {SafeAreaView} from 'react-native-safe-area-context';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system/legacy';
+import {
+  createNotarialRequest,
+  getNotarialRequests,
+} from '../services/notarialService';
 
 export default function ClientNotarial({navigation}) {
   const [activeTab, setActiveTab] = useState('New Request');
+  const [requests, setRequests] = useState([]);
+  const [loadingStatus, setLoadingStatus] = useState(true);
+
+  const loadRequests = useCallback(async () => {
+    try {
+      setLoadingStatus(true);
+      const records = await getNotarialRequests();
+      setRequests(Array.isArray(records) ? records : []);
+    } catch (error) {
+      Alert.alert('Error', error?.message ?? 'Failed to load notarial requests.');
+      setRequests([]);
+    } finally {
+      setLoadingStatus(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadRequests();
+  }, [loadRequests]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -60,88 +86,248 @@ export default function ClientNotarial({navigation}) {
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>
-        {activeTab === 'New Request' ? <NewRequestForm navigation={navigation} /> : <RequestStatusList navigation={navigation} />}
+        {activeTab === 'New Request' ? (
+          <NewRequestForm navigation={navigation} onSubmitted={loadRequests} />
+        ) : (
+          <RequestStatusList
+            navigation={navigation}
+            requests={requests}
+            loadingStatus={loadingStatus}
+          />
+        )}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-const NewRequestForm = ({navigation}) => (
-  <View style={styles.formCard}>
-    <Text style={styles.sectionTitle}>New Request</Text>
+const NewRequestForm = ({navigation, onSubmitted}) => {
+  const [serviceType, setServiceType] = useState('');
+  const [preferredDate, setPreferredDate] = useState('');
+  const [preferredTime, setPreferredTime] = useState('');
+  const [details, setDetails] = useState('');
+  const [documentFile, setDocumentFile] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
 
-    <Text style={styles.inputLabel}>Type of Document</Text>
-    <TextInput style={styles.input} placeholder="Affidavit / Contract / POA" />
+  const pickDocument = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+        copyToCacheDirectory: true,
+      });
 
-    <Text style={styles.inputLabel}>Upload Document</Text>
-    <TouchableOpacity
-      style={styles.uploadArea}
-      onPress={() => Alert.alert('Upload', 'Document upload picker coming soon')}>
-      <Text style={styles.uploadMainText}>Click to upload your document</Text>
-      <Text style={styles.uploadSubText}>PDF, DOC, DOCX (max 10MB)</Text>
-    </TouchableOpacity>
+      if (result.canceled) {
+        return;
+      }
 
-    <View style={styles.row}>
-      <View style={styles.halfInputLeft}>
-        <Text style={styles.inputLabel}>Preferred Date</Text>
-        <TextInput style={styles.input} placeholder="mm/dd/yyyy" />
-      </View>
-      <View style={styles.halfInputRight}>
-        <Text style={styles.inputLabel}>Preferred Time</Text>
-        <TextInput style={styles.input} placeholder="10:00 AM" />
-      </View>
-    </View>
+      const asset = result.assets?.[0];
+      if (!asset?.uri) {
+        return;
+      }
 
-    <Text style={styles.inputLabel}>Additional Notes</Text>
-    <TextInput
-      style={[styles.input, styles.textArea]}
-      placeholder="Any special instructions or requirements..."
-      multiline
-      numberOfLines={4}
-    />
+      setDocumentFile(asset);
+    } catch (error) {
+      Alert.alert('Error', error?.message ?? 'Unable to pick document.');
+    }
+  };
 
-    <TouchableOpacity
-      style={styles.submitButton}
-      onPress={() => navigation.navigate('NotarialRequestSubmitted')}>
-      <Text style={styles.submitButtonText}>Submit Request</Text>
-    </TouchableOpacity>
-  </View>
-);
+  const handleSubmit = async () => {
+    if (!serviceType.trim()) {
+      Alert.alert('Error', 'Type of document is required.');
+      return;
+    }
+    if (!documentFile?.uri) {
+      Alert.alert('Error', 'Please upload a document before submitting.');
+      return;
+    }
 
-const RequestStatusList = ({navigation}) => (
-  <View style={styles.statusContainer}>
-    <Text style={styles.sectionTitle}>Request Status</Text>
+    try {
+      setSubmitting(true);
 
-    <View style={styles.statusCard}>
-      <View style={styles.statusHeaderRow}>
-        <Text style={styles.docTypeTitle}>Affidavit</Text>
-        <View style={[styles.badge, {backgroundColor: '#FEF9C3'}]}>
-          <Text style={[styles.badgeText, {color: '#854D0E'}]}>PENDING</Text>
+      let documentBase64 = null;
+      if (documentFile?.uri) {
+        documentBase64 = await FileSystem.readAsStringAsync(documentFile.uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+      }
+
+      await createNotarialRequest({
+        service_type: serviceType.trim(),
+        preferred_date: preferredDate || null,
+        details: [preferredTime ? `Preferred Time: ${preferredTime}` : null, details.trim() || null]
+          .filter(Boolean)
+          .join('\n'),
+        document_name: documentFile?.name || null,
+        document_base64: documentBase64,
+      });
+
+      setServiceType('');
+      setPreferredDate('');
+      setPreferredTime('');
+      setDetails('');
+      setDocumentFile(null);
+      await onSubmitted?.();
+      navigation.navigate('NotarialRequestSubmitted');
+    } catch (error) {
+      Alert.alert('Error', error?.message ?? 'Unable to submit notarial request.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <View style={styles.formCard}>
+      <Text style={styles.sectionTitle}>New Request</Text>
+
+      <Text style={styles.inputLabel}>Type of Document</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Affidavit / Contract / POA"
+        value={serviceType}
+        onChangeText={setServiceType}
+      />
+
+      <Text style={styles.inputLabel}>Upload Document</Text>
+      <TouchableOpacity style={styles.uploadArea} onPress={pickDocument}>
+        <Text style={styles.uploadMainText}>
+          {documentFile?.name || 'Click to upload your document'}
+        </Text>
+        <Text style={styles.uploadSubText}>PDF, DOC, DOCX (max 10MB)</Text>
+      </TouchableOpacity>
+
+      <View style={styles.row}>
+        <View style={styles.halfInputLeft}>
+          <Text style={styles.inputLabel}>Preferred Date</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="YYYY-MM-DD"
+            value={preferredDate}
+            onChangeText={setPreferredDate}
+          />
+        </View>
+        <View style={styles.halfInputRight}>
+          <Text style={styles.inputLabel}>Preferred Time</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="10:00 AM"
+            value={preferredTime}
+            onChangeText={setPreferredTime}
+          />
         </View>
       </View>
-      <Text style={styles.subInfoText}>Submitted on 2/16/2026</Text>
-      <Text style={styles.scheduleText}>Scheduled: 2/19/2026 at 10:00 AM</Text>
-    </View>
 
-    <View style={styles.statusCard}>
-      <View style={styles.statusHeaderRow}>
-        <Text style={styles.docTypeTitle}>Power of Attorney</Text>
-        <View style={[styles.badge, {backgroundColor: '#1E293B'}]}>
-          <Text style={[styles.badgeText, {color: '#FFF'}]}>APPROVED</Text>
-        </View>
-      </View>
-      <Text style={styles.subInfoText}>Submitted on 2/12/2026</Text>
-      <Text style={styles.scheduleText}>Scheduled: 2/15/2026 at 2:00 PM</Text>
+      <Text style={styles.inputLabel}>Additional Notes</Text>
+      <TextInput
+        style={[styles.input, styles.textArea]}
+        placeholder="Any special instructions or requirements..."
+        multiline
+        numberOfLines={4}
+        value={details}
+        onChangeText={setDetails}
+      />
+
       <TouchableOpacity
-        style={styles.paymentButton}
-        onPress={() => navigation.navigate('BookingSummary', { 
-          serviceData: { type: 'Power of Attorney', date: 'February 15, 2026', time: '2:00 PM', amount: '₱4,000' }
-        })}>
-        <Text style={styles.paymentButtonText}>Proceed to Payment - ₱4,000.00</Text>
+        style={styles.submitButton}
+        onPress={handleSubmit}
+        disabled={submitting}>
+        <Text style={styles.submitButtonText}>
+          {submitting ? 'Submitting...' : 'Submit Request'}
+        </Text>
       </TouchableOpacity>
     </View>
-  </View>
-);
+  );
+};
+
+const RequestStatusList = ({navigation, requests, loadingStatus}) => {
+  if (loadingStatus) {
+    return (
+      <View style={styles.statusContainer}>
+        <View style={styles.statusCardCentered}>
+          <ActivityIndicator color="#0F172A" />
+          <Text style={styles.subInfoText}>Loading request status...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (requests.length === 0) {
+    return (
+      <View style={styles.statusContainer}>
+        <View style={styles.statusCardCentered}>
+          <Text style={styles.docTypeTitle}>No requests yet</Text>
+          <Text style={styles.subInfoText}>Your notarial requests will appear here.</Text>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.statusContainer}>
+      <Text style={styles.sectionTitle}>Request Status</Text>
+
+      {requests.map(item => {
+        const status = (item.status ?? 'PENDING').toUpperCase();
+        const submittedDate = item.created_at
+          ? new Date(item.created_at).toLocaleDateString()
+          : 'N/A';
+        const preferredDate = item.preferred_date
+          ? new Date(item.preferred_date).toLocaleDateString()
+          : 'Not set';
+
+        return (
+          <View key={item.id} style={styles.statusCard}>
+            <View style={styles.statusHeaderRow}>
+              <Text style={styles.docTypeTitle}>{item.service_type}</Text>
+              <View
+                style={[
+                  styles.badge,
+                  status === 'ACCEPTED'
+                    ? {backgroundColor: '#1E293B'}
+                    : status === 'REJECTED'
+                      ? {backgroundColor: '#FEE2E2'}
+                      : {backgroundColor: '#FEF9C3'},
+                ]}>
+                <Text
+                  style={[
+                    styles.badgeText,
+                    status === 'ACCEPTED'
+                      ? {color: '#FFF'}
+                      : status === 'REJECTED'
+                        ? {color: '#B91C1C'}
+                        : {color: '#854D0E'},
+                  ]}>
+                  {status}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.subInfoText}>Submitted on {submittedDate}</Text>
+            <Text style={styles.scheduleText}>Preferred date: {preferredDate}</Text>
+
+            {status === 'ACCEPTED' && (
+              <TouchableOpacity
+                style={styles.paymentButton}
+                onPress={() =>
+                  navigation.navigate('BookingSummary', {
+                    serviceData: {
+                      type: item.service_type,
+                      date: preferredDate,
+                      time: 'To be confirmed',
+                      amount: '₱4,000',
+                    },
+                    paymentContext: {
+                      sourceType: 'notarial',
+                      sourceId: item.id,
+                    },
+                  })
+                }>
+                <Text style={styles.paymentButtonText}>Proceed to Payment</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        );
+      })}
+    </View>
+  );
+};
 
 const styles = StyleSheet.create({
   container: {flex: 1, backgroundColor: '#F8FAFC'},
@@ -216,6 +402,14 @@ const styles = StyleSheet.create({
   },
   submitButtonText: {color: '#FFF', fontWeight: '700', fontSize: 16},
   statusContainer: {marginHorizontal: 20},
+  statusCardCentered: {
+    backgroundColor: '#FFF',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 15,
+    elevation: 1,
+    alignItems: 'center',
+  },
   statusCard: {
     backgroundColor: '#FFF',
     borderRadius: 20,
@@ -231,7 +425,7 @@ const styles = StyleSheet.create({
   docTypeTitle: {fontSize: 18, fontWeight: '700', color: '#0F172A'},
   badge: {paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8},
   badgeText: {fontSize: 10, fontWeight: '800'},
-  subInfoText: {fontSize: 12, color: '#94A3B8', marginTop: 2},
+  subInfoText: {fontSize: 12, color: '#94A3B8', marginTop: 8, textAlign: 'center'},
   scheduleText: {fontSize: 13, color: '#475569', marginTop: 10},
   paymentButton: {
     backgroundColor: '#1E293B',

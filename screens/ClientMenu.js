@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React from 'react';
 import {
   Alert,
   ScrollView,
@@ -19,12 +19,14 @@ const menuItems = [
   {name: 'Profile', icon: '👤', route: 'ProfileSettingsClient'},
 ];
 
-export default function ClientMenu({navigation}) {
-  const [activeTab, setActiveTab] = useState('Dashboard');
+export default function ClientMenu({navigation, route}) {
+  const stackState = navigation.getState();
+  const previousRouteName =
+    stackState?.routes?.[Math.max(0, (stackState?.index ?? 0) - 1)]?.name ??
+    'HomepageClient';
+  const activeRoute = route?.params?.activeRoute || previousRouteName;
 
   const onMenuPress = item => {
-    setActiveTab(item.name);
-
     if (item.route) {
       navigation.navigate(item.route);
       return;
@@ -71,7 +73,7 @@ export default function ClientMenu({navigation}) {
 
         <ScrollView style={styles.navContainer} showsVerticalScrollIndicator={false}>
           {menuItems.map(item => {
-            const isActive = activeTab === item.name;
+            const isActive = activeRoute === item.route;
             return (
               <TouchableOpacity
                 key={item.name}

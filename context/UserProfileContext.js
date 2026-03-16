@@ -3,10 +3,10 @@ import React, {createContext, useContext, useMemo, useState} from 'react';
 const UserProfileContext = createContext(null);
 
 const initialProfile = {
-  name: 'Alex Johnson',
-  email: 'alex@email.com',
-  phone: '09123456789',
-  address: '123 Main Street, Makati City',
+  name: '',
+  email: '',
+  phone: '',
+  address: '',
   role: 'Client',
 };
 

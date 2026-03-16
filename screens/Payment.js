@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import {
+  Alert,
+  ActivityIndicator,
   StyleSheet,
   View,
   Text,
@@ -7,24 +9,69 @@ import {
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import {updateAppointmentStatus} from '../services/appointmentService';
+import {updateNotarialRequestStatus} from '../services/notarialService';
 
 export default function Payment({navigation, route}) {
   const [pin, setPin] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const paymentMethod = route?.params?.paymentMethod || 'gcash';
   const serviceData = route?.params?.serviceData || { amount: '₱2,500' };
+  const paymentContext = route?.params?.paymentContext || null;
 
   const getPaymentMethodLabel = () => {
     const methods = {
       gcash: 'GCash',
       paypal: 'PayPal',
-      banktransfer: 'Bank Transfer'
+      card: 'Credit/Debit Card',
+      banktransfer: 'Bank Transfer',
     };
-    return methods[paymentMethod] || 'Payment';
+    return methods[String(paymentMethod).toLowerCase()] || 'Payment';
   };
 
-  const handlePayNow = () => {
-    if (pin.length === 4) {
-      navigation.navigate('PaymentSuccessful', { amount: serviceData.amount });
+  const getMethodIcon = () => {
+    const normalizedMethod = String(paymentMethod).toLowerCase();
+    if (normalizedMethod === 'gcash') return '📱';
+    if (normalizedMethod === 'paypal') return '🏦';
+    if (normalizedMethod === 'card') return '💳';
+    return '🏧';
+  };
+
+  const completePaidService = async () => {
+    if (!paymentContext?.sourceType || !paymentContext?.sourceId) {
+      return;
+    }
+
+    if (paymentContext.sourceType === 'appointment') {
+      await updateAppointmentStatus(paymentContext.sourceId, 'completed');
+      return;
+    }
+
+    if (paymentContext.sourceType === 'notarial') {
+      await updateNotarialRequestStatus(paymentContext.sourceId, 'completed');
+    }
+  };
+
+  const handlePayNow = async () => {
+    if (pin.length !== 4 || submitting) {
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      await completePaidService();
+
+      const transactionId = `BTMS-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`;
+      navigation.replace('PaymentSuccessful', {
+        amount: serviceData.amount,
+        transactionId,
+        paymentContext,
+        serviceData,
+      });
+    } catch (error) {
+      Alert.alert('Payment Failed', error?.message ?? 'Unable to complete payment. Please try again.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -96,9 +143,7 @@ export default function Payment({navigation, route}) {
       <View style={styles.content}>
         <View style={styles.brandRow}>
           <View style={styles.gcashIcon}>
-            <Text style={styles.gcashIconText}>
-              {paymentMethod === 'gcash' ? '📱' : paymentMethod === 'paypal' ? '🏦' : '🏧'}
-            </Text>
+            <Text style={styles.gcashIconText}>{getMethodIcon()}</Text>
           </View>
           <Text style={styles.gcashText}>{getPaymentMethodLabel()}</Text>
         </View>
@@ -112,11 +157,15 @@ export default function Payment({navigation, route}) {
         <Keypad />
 
         <TouchableOpacity 
-          style={[styles.payButton, pin.length < 4 && styles.payButtonDisabled]} 
+          style={[styles.payButton, (pin.length < 4 || submitting) && styles.payButtonDisabled]} 
           onPress={handlePayNow}
-          disabled={pin.length < 4}
+          disabled={pin.length < 4 || submitting}
         >
-          <Text style={styles.payButtonText}>Pay Now</Text>
+          {submitting ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <Text style={styles.payButtonText}>Pay Now</Text>
+          )}
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
