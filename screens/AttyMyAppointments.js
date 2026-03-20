@@ -15,6 +15,16 @@ import {
   updateAppointmentStatus,
 } from '../services/appointmentService';
 
+function resolveScheduleValue(item) {
+  return (
+    item?.scheduled_at ||
+    item?.preferred_date ||
+    item?.updated_at ||
+    item?.created_at ||
+    null
+  );
+}
+
 function formatDateTime(isoDateTime) {
   if (!isoDateTime) {
     return {date: 'No schedule', time: '--:--'};
@@ -100,7 +110,7 @@ export default function AttyMyAppointments({navigation}) {
         ) : (
           appointments.map(item => {
             const status = (item.status ?? 'PENDING').toUpperCase();
-            const {date, time} = formatDateTime(item.scheduled_at);
+            const {date, time} = formatDateTime(resolveScheduleValue(item));
             return (
               <View key={item.id} style={styles.card}>
                 <View style={styles.cardHeader}>
@@ -169,6 +179,25 @@ export default function AttyMyAppointments({navigation}) {
                       <Text style={styles.rescheduleBtnText}>Reschedule</Text>
                     </TouchableOpacity>
                   </View>
+                )}
+
+                {(status === 'COMPLETED' || status === 'RESCHEDULED') && (
+                  <TouchableOpacity
+                    style={styles.consultBtn}
+                    onPress={() =>
+                      navigation.navigate('AttyConsultationMessage', {
+                        chatId: item.id,
+                        clientName: item.client_name ?? 'Client',
+                        clientInitials: (item.client_name ?? 'Client')
+                          .split(' ')
+                          .map(part => part[0])
+                          .join('')
+                          .slice(0, 2)
+                          .toUpperCase(),
+                      })
+                    }>
+                    <Text style={styles.consultBtnText}>View Messages</Text>
+                  </TouchableOpacity>
                 )}
               </View>
             );

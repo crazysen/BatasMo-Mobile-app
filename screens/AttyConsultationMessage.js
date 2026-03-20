@@ -63,6 +63,14 @@ export default function ConsultationChat({ navigation, route }) {
     loadThread();
   }, [loadThread]);
 
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      loadThread();
+    }, 1500);
+
+    return () => clearInterval(intervalId);
+  }, [loadThread]);
+
   const handleSend = async () => {
     if (!message.trim()) return;
     const next = await appendThreadMessage(threadId, {

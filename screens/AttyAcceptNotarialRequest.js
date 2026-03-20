@@ -1,26 +1,80 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
+  Alert,
+  Linking,
   StyleSheet,
   Text,
   View,
   ScrollView,
   TouchableOpacity,
+  ActivityIndicator,
   } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import {
+  resolveNotarialDocumentUrl,
+  updateNotarialRequestStatus,
+} from '../services/notarialService';
 
 const ArrowLeft = (props) => <MaterialCommunityIcons name="arrow-left" {...props} />;
 const FileText = (props) => <MaterialCommunityIcons name="file-document" {...props} />;
 const Calendar = (props) => <MaterialCommunityIcons name="calendar" {...props} />;
 const ShieldCheck = (props) => <MaterialCommunityIcons name="shield-check" {...props} />;
-const Minus = (props) => <MaterialCommunityIcons name="minus" {...props} />;
-const Plus = (props) => <MaterialCommunityIcons name="plus" {...props} />;
 
 const AcceptRequestScreen = ({ navigation, route }) => {
   const [isChecked, setIsChecked] = useState(false);
-  const title = route?.params?.title || 'Affidavit of Loss';
-  const user = route?.params?.user || 'Alice Cooper';
-  const caseId = route?.params?.caseId || '#NT-88293';
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const request = route?.params?.request;
+  const title = request?.service_type || route?.params?.title || 'Notarial Request';
+  const user = request?.client_name || route?.params?.user || 'Client';
+  const caseId = request?.id || route?.params?.caseId || 'N/A';
+  const preferredDate = useMemo(() => {
+    if (!request?.preferred_date) return 'No preferred date set';
+    const value = new Date(request.preferred_date);
+    if (Number.isNaN(value.getTime())) return 'No preferred date set';
+    return value.toLocaleString();
+  }, [request?.preferred_date]);
+
+  const documentName = request?.document_url
+    ? request.document_url.split('/').pop()
+    : 'No document uploaded';
+
+  const handleConfirm = async () => {
+    if (!request?.id) {
+      Alert.alert('Error', 'Request details are missing. Please go back and try again.');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      await updateNotarialRequestStatus(request.id, 'accepted');
+      navigation.replace('AttyNotarialRequestAccepted', {
+        title,
+        user,
+        caseId,
+        preferredDate,
+      });
+    } catch (error) {
+      Alert.alert('Error', error?.message || 'Unable to accept request.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const openDocument = async () => {
+    const url = resolveNotarialDocumentUrl(request?.document_url);
+    if (!url) {
+      Alert.alert('No document', 'This request has no document attached.');
+      return;
+    }
+
+    try {
+      await Linking.openURL(url);
+    } catch (_) {
+      Alert.alert('Error', 'Unable to open this document on your device.');
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -47,7 +101,7 @@ const AcceptRequestScreen = ({ navigation, route }) => {
             <Text style={styles.clientName}>Client: <Text style={styles.darkText}>{user}</Text></Text>
             <View style={styles.dateRow}>
               <Calendar size={14} color="#94a3b8" />
-              <Text style={styles.dateText}>Oct 28, 2024 • 11:00 AM</Text>
+              <Text style={styles.dateText}>{preferredDate}</Text>
             </View>
           </View>
         </View>
@@ -55,34 +109,16 @@ const AcceptRequestScreen = ({ navigation, route }) => {
         {/* Document Review Section */}
         <View style={styles.docReviewHeader}>
           <Text style={styles.sectionLabel}>DOCUMENT REVIEW</Text>
-          <Text style={styles.fileNameLink}>affidavit_loss_draft.pdf</Text>
+          <TouchableOpacity onPress={openDocument}>
+            <Text style={styles.fileNameLink}>{documentName}</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.pdfContainer}>
-          <View style={styles.pdfHeader}>
-            <View style={styles.windowControls}>
-              <View style={[styles.dot, { backgroundColor: '#FF5F56' }]} />
-              <View style={[styles.dot, { backgroundColor: '#FFBD2E' }]} />
-              <View style={[styles.dot, { backgroundColor: '#27C93F' }]} />
-            </View>
-            <Text style={styles.pageIndicator}>Page 1 of 3</Text>
-          </View>
-          
-          {/* Mock PDF Content */}
-          <View style={styles.pdfBody}>
-             <View style={styles.skeletonLineShort} />
-             <View style={styles.skeletonLineLong} />
-             <View style={styles.skeletonLineLong} />
-             <View style={styles.skeletonLineLong} />
-             <View style={styles.skeletonLineLong} />
-             <View style={styles.skeletonLineMedium} />
-          </View>
-
-          {/* Zoom Controls */}
-          <View style={styles.zoomControls}>
-            <TouchableOpacity style={styles.zoomBtn}><Minus size={18} color="#fff" /></TouchableOpacity>
-            <View style={styles.zoomDivider} />
-            <TouchableOpacity style={styles.zoomBtn}><Plus size={18} color="#fff" /></TouchableOpacity>
+          <View style={styles.previewBody}>
+            <Text style={styles.previewTitle}>Request Details</Text>
+            <Text style={styles.previewText}>{request?.details || 'No additional details provided.'}</Text>
+            <Text style={styles.previewHint}>Tap the file name above to open the uploaded document.</Text>
           </View>
         </View>
 
@@ -106,13 +142,19 @@ const AcceptRequestScreen = ({ navigation, route }) => {
       <View style={styles.footer}>
         <TouchableOpacity 
           style={[styles.confirmBtn, !isChecked && styles.disabledBtn]}
-          disabled={!isChecked}
-          onPress={() => navigation.navigate('AttyNotarialRequestAccepted', { title, user, caseId })}
+          disabled={!isChecked || isSubmitting}
+          onPress={handleConfirm}
         >
-          <ShieldCheck size={20} color="#fff" style={{ marginRight: 8 }} />
-          <Text style={styles.confirmBtnText}>Confirm & Accept</Text>
+          {isSubmitting ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <>
+              <ShieldCheck size={20} color="#fff" style={{ marginRight: 8 }} />
+              <Text style={styles.confirmBtnText}>Confirm & Accept</Text>
+            </>
+          )}
         </TouchableOpacity>
-        <TouchableOpacity style={styles.cancelBtn}>
+        <TouchableOpacity style={styles.cancelBtn} onPress={() => navigation.goBack()}>
           <Text style={styles.cancelText}>Cancel</Text>
         </TouchableOpacity>
       </View>
@@ -139,17 +181,10 @@ const styles = StyleSheet.create({
   docReviewHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   fileNameLink: { fontSize: 11, color: '#1e3a8a', fontWeight: 'bold', textDecorationLine: 'underline' },
   pdfContainer: { backgroundColor: '#fff', borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#e2e8f0', marginBottom: 25 },
-  pdfHeader: { flexDirection: 'row', justifyContent: 'space-between', padding: 12, backgroundColor: '#f8fafc', borderBottomWidth: 1, borderBottomColor: '#e2e8f0' },
-  windowControls: { flexDirection: 'row' },
-  dot: { width: 10, height: 10, borderRadius: 5, marginRight: 6 },
-  pageIndicator: { fontSize: 11, color: '#94a3b8' },
-  pdfBody: { padding: 40, alignItems: 'center', minHeight: 250 },
-  skeletonLineShort: { width: '40%', height: 15, backgroundColor: '#f1f5f9', marginBottom: 15 },
-  skeletonLineLong: { width: '100%', height: 10, backgroundColor: '#f1f5f9', marginBottom: 10 },
-  skeletonLineMedium: { width: '70%', height: 10, backgroundColor: '#f1f5f9' },
-  zoomControls: { position: 'absolute', bottom: 15, right: 15, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 10, flexDirection: 'row', padding: 4 },
-  zoomBtn: { padding: 4 },
-  zoomDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.3)', marginHorizontal: 4 },
+  previewBody: { padding: 20, minHeight: 120 },
+  previewTitle: { fontSize: 14, fontWeight: '700', color: '#0f172a', marginBottom: 10 },
+  previewText: { fontSize: 13, color: '#334155', lineHeight: 20 },
+  previewHint: { fontSize: 12, color: '#94a3b8', marginTop: 12 },
   termsCard: { backgroundColor: '#fff', borderRadius: 16, padding: 20, flexDirection: 'row' },
   checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 1, borderColor: '#cbd5e1', marginRight: 12, justifyContent: 'center', alignItems: 'center' },
   checkboxActive: { borderColor: '#1e3a8a' },

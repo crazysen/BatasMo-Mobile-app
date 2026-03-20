@@ -1,13 +1,74 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
+const ENV_API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 const AUTH_TOKEN_KEY = 'auth_token';
 const API_TIMEOUT_MS = 20000;
+
+function isPrivateIpv4Host(value) {
+  const host = String(value || '').trim();
+  if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return false;
+  const parts = host.split('.').map(segment => Number(segment));
+  if (parts.some(part => Number.isNaN(part) || part < 0 || part > 255)) return false;
+  if (parts[0] === 10) return true;
+  if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+  if (parts[0] === 192 && parts[1] === 168) return true;
+  return false;
+}
+
+function getExpoHostIp() {
+  const hostUri =
+    Constants?.expoConfig?.hostUri ||
+    Constants?.manifest2?.extra?.expoClient?.hostUri ||
+    Constants?.manifest?.debuggerHost ||
+    '';
+
+  if (!hostUri) return null;
+  const [host] = hostUri.split(':');
+  return host || null;
+}
+
+function normalizeBaseUrl(url) {
+  return String(url || '').trim().replace(/\/+$/, '');
+}
+
+function resolveApiBaseUrl() {
+  const configured = normalizeBaseUrl(ENV_API_BASE_URL);
+  const expoHostIp = getExpoHostIp();
+
+  if (configured) {
+    if (expoHostIp && /localhost|127\.0\.0\.1/i.test(configured)) {
+      return configured.replace(/localhost|127\.0\.0\.1/gi, expoHostIp);
+    }
+    return configured;
+  }
+
+  if (expoHostIp) {
+    return `http://${expoHostIp}:8000/api`;
+  }
+
+  return '';
+}
+
+const API_BASE_URL = resolveApiBaseUrl();
+
+function buildFallbackApiBaseUrl() {
+  const expoHostIp = getExpoHostIp();
+  if (!isPrivateIpv4Host(expoHostIp)) return '';
+  const candidate = `http://${expoHostIp}:8000/api`;
+  return normalizeBaseUrl(candidate);
+}
+
+const FALLBACK_API_BASE_URL = buildFallbackApiBaseUrl();
+
+function isLoginRequest(path) {
+  return String(path || '').trim().toLowerCase() === '/auth/login';
+}
 
 function assertApiConfigured() {
   if (!API_BASE_URL) {
     throw new Error(
-      'API base URL is missing. Set EXPO_PUBLIC_API_BASE_URL in .env and restart Expo.',
+      'API base URL is missing. Set EXPO_PUBLIC_API_BASE_URL in .env (example: http://192.168.x.x:8000/api) and restart Expo.',
     );
   }
 }
@@ -41,24 +102,57 @@ export async function apiRequest(path, {method = 'GET', body, auth = false} = {}
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+  const candidateBaseUrls = [API_BASE_URL];
+  if (
+    isLoginRequest(path) &&
+    FALLBACK_API_BASE_URL &&
+    FALLBACK_API_BASE_URL !== API_BASE_URL
+  ) {
+    candidateBaseUrls.push(FALLBACK_API_BASE_URL);
+  }
+
+  const timeoutMs = isLoginRequest(path) ? 30000 : API_TIMEOUT_MS;
 
   let response;
-  try {
-    response = await fetch(`${API_BASE_URL}${path}`, {
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : undefined,
-      signal: controller.signal,
-    });
-  } catch (error) {
-    if (error?.name === 'AbortError') {
-      throw new Error('Request timed out. Please check your internet/API server and try again.');
+  let lastError = null;
+  for (let index = 0; index < candidateBaseUrls.length; index += 1) {
+    const baseUrl = candidateBaseUrls[index];
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      response = await fetch(`${baseUrl}${path}`, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      break;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      lastError = error;
+      const isAbort = error?.name === 'AbortError';
+      const isNetwork = /network request failed|fetch failed|failed to fetch/i.test(
+        String(error?.message || ''),
+      );
+      const canRetry = (isAbort || isNetwork) && index < candidateBaseUrls.length - 1;
+      if (!canRetry) {
+        if (isAbort) {
+          const attempted = candidateBaseUrls.join(', ');
+          throw new Error(`Request timed out while contacting ${attempted}. Please check your internet/API server and try again.`);
+        }
+        if (isNetwork) {
+          const attempted = candidateBaseUrls.join(', ');
+          throw new Error(`Cannot reach API at ${attempted}. Ensure Laravel is running and your phone is on the same network.`);
+        }
+        throw error;
+      }
     }
-    throw error;
-  } finally {
-    clearTimeout(timeoutId);
+  }
+
+  if (!response && lastError) {
+    throw lastError;
   }
 
   let payload = null;

@@ -1,5 +1,21 @@
 import {apiRequest} from './apiClient';
 
+function normalizeBaseApiUrl() {
+  return String(process.env.EXPO_PUBLIC_API_BASE_URL || '').trim().replace(/\/+$/, '');
+}
+
+export function resolveNotarialDocumentUrl(documentUrl) {
+  const rawUrl = String(documentUrl || '').trim();
+  if (!rawUrl) return '';
+  if (/^https?:\/\//i.test(rawUrl)) return rawUrl;
+
+  const apiBase = normalizeBaseApiUrl();
+  if (!apiBase) return rawUrl;
+
+  const origin = apiBase.replace(/\/api$/i, '');
+  return `${origin}/${rawUrl.replace(/^\/+/, '')}`;
+}
+
 export async function getNotarialRequests() {
   const response = await apiRequest('/notarial-requests', {auth: true});
   return response?.data ?? [];

@@ -32,6 +32,14 @@ const ConsultationChat = ({navigation, route}) => {
     loadThread();
   }, [loadThread]);
 
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      loadThread();
+    }, 1500);
+
+    return () => clearInterval(intervalId);
+  }, [loadThread]);
+
   const handleSendMessage = async () => {
     if (!messageText.trim()) return;
     const next = await appendThreadMessage(threadId, {

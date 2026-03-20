@@ -11,6 +11,16 @@ import {
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {getMyAppointments} from '../services/appointmentService';
 
+function resolveScheduleValue(item) {
+  return (
+    item?.scheduled_at ||
+    item?.preferred_date ||
+    item?.updated_at ||
+    item?.created_at ||
+    null
+  );
+}
+
 function formatDateTime(isoDateTime) {
   if (!isoDateTime) {
     return {date: 'No schedule', time: '--:--'};
@@ -91,7 +101,7 @@ export default function MyAppointments({navigation}) {
         ) : (
           appointments.map(item => {
             const status = (item.status ?? 'PENDING').toUpperCase();
-            const {date, time} = formatDateTime(item.scheduled_at);
+            const {date, time} = formatDateTime(resolveScheduleValue(item));
             const canChat =
               status === 'CONFIRMED' ||
               status === 'COMPLETED' ||

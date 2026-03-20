@@ -10,8 +10,19 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import {useFocusEffect} from '@react-navigation/native';
+import {SafeAreaView} from 'react-native-safe-area-context';
 import {useUserProfile} from '../context/UserProfileContext';
 import {getMyAppointments} from '../services/appointmentService';
+
+function resolveScheduleValue(item) {
+  return (
+    item?.scheduled_at ||
+    item?.preferred_date ||
+    item?.updated_at ||
+    item?.created_at ||
+    null
+  );
+}
 
 const AttorneyDashboard = ({navigation}) => {
   const {width} = useWindowDimensions();
@@ -49,7 +60,8 @@ const AttorneyDashboard = ({navigation}) => {
   }).length;
 
   const recentConsultations = appointments.slice(0, 3).map(item => {
-    const dateValue = item.scheduled_at ? new Date(String(item.scheduled_at).replace(' ', 'T')) : null;
+    const scheduleValue = resolveScheduleValue(item);
+    const dateValue = scheduleValue ? new Date(String(scheduleValue).replace(' ', 'T')) : null;
     return {
       id: item.id,
       name: item.client_name || 'Client',
@@ -80,7 +92,7 @@ const AttorneyDashboard = ({navigation}) => {
   );
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.navbar}>
         <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('AttyMenu')}>
           <Text style={styles.menuIcon}>☰</Text>
@@ -98,12 +110,14 @@ const AttorneyDashboard = ({navigation}) => {
           <TouchableOpacity style={styles.navButton}>
             <Text style={styles.bellIcon}>🔔</Text>
           </TouchableOpacity>
-          <View style={styles.profileContainer}>
+          <TouchableOpacity
+            style={styles.profileContainer}
+            onPress={() => navigation.navigate('AttyProfileSettings')}>
             <View style={styles.profileCircle} />
             <View style={styles.pendingBadge}>
               <Text style={styles.badgeText}>PENDING</Text>
             </View>
-          </View>
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -210,7 +224,7 @@ const AttorneyDashboard = ({navigation}) => {
           <MetricBar label="RESPONSE RATE" percentage={98} color="#1E293B" value={98} />
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 };
 

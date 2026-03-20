@@ -1,13 +1,23 @@
-import React from 'react';
+import React, {useCallback, useState} from 'react';
 import {
+  ActivityIndicator,
+  Alert,
+  Linking,
   StyleSheet,
   Text,
   View,
   ScrollView,
   TouchableOpacity,
+  RefreshControl,
   } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import {useFocusEffect} from '@react-navigation/native';
+import {
+  getNotarialRequests,
+  resolveNotarialDocumentUrl,
+  updateNotarialRequestStatus,
+} from '../services/notarialService';
 
 const ArrowLeft = (props) => <MaterialCommunityIcons name="arrow-left" {...props} />;
 const FileText = (props) => <MaterialCommunityIcons name="file-document" {...props} />;
@@ -18,31 +28,66 @@ const MessageSquare = (props) => <MaterialCommunityIcons name="message-text-outl
 const X = (props) => <MaterialCommunityIcons name="close" {...props} />;
 
 const STATUS_CONFIG = {
-  'PENDING REVIEW': { bg: '#FFF7ED', text: '#C2410C' },
-  'APPROVED': { bg: '#EFF6FF', text: '#2563EB' },
-  'REVISION REQUESTED': { bg: '#FEF2F2', text: '#DC2626' },
+  'PENDING REVIEW': { bg: '#FEF3C7', text: '#92400E' },
+  'APPROVED': { bg: '#DBEAFE', text: '#1D4ED8' },
+  'REVISION REQUESTED': { bg: '#FEE2E2', text: '#B91C1C' },
+  'COMPLETED': { bg: '#DCFCE7', text: '#166534' },
 };
 
-const ServiceCard = ({ item, navigation }) => {
-  const isApproved = item.status === 'APPROVED';
+function mapStatus(status) {
+  const normalized = String(status || 'pending').toLowerCase();
+  if (normalized === 'accepted') return 'APPROVED';
+  if (normalized === 'rejected') return 'REVISION REQUESTED';
+  if (normalized === 'completed') return 'COMPLETED';
+  return 'PENDING REVIEW';
+}
+
+function formatDate(isoDate) {
+  if (!isoDate) return 'No date set';
+  const value = new Date(isoDate);
+  if (Number.isNaN(value.getTime())) return 'No date set';
+  return value.toLocaleDateString();
+}
+
+const ServiceCard = ({ item, onAccept, onReject, actionLoading }) => {
+  const isApproved = item.status === 'APPROVED' || item.status === 'COMPLETED';
+  const isBusy = actionLoading;
   const statusStyle = STATUS_CONFIG[item.status] || STATUS_CONFIG['PENDING REVIEW'];
+  const submittedName = item.client_name || 'Client';
+  const fileName = item.document_url
+    ? item.document_url.split('/').pop()
+    : 'No document uploaded';
+
+  const handleOpenDocument = async () => {
+    const url = resolveNotarialDocumentUrl(item.document_url);
+    if (!url) {
+      Alert.alert('No document', 'This request has no uploaded document yet.');
+      return;
+    }
+
+    try {
+      await Linking.openURL(url);
+    } catch (_) {
+      Alert.alert('Error', 'Unable to open this document on your device.');
+    }
+  };
 
   return (
     <View style={styles.card}>
       {/* Card Header */}
       <View style={styles.cardHeader}>
         <View style={styles.iconContainer}>
-          <FileText size={24} color="#6366f1" />
+          <FileText size={24} color="#1E3A8A" />
         </View>
         <View style={styles.headerTextContent}>
           <View style={styles.titleRow}>
-            <Text style={styles.serviceTitle}>{item.title}</Text>
+            <Text style={styles.serviceTitle}>{item.service_type}</Text>
             <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
               <Text style={[styles.statusText, { color: statusStyle.text }]}>{item.status}</Text>
             </View>
           </View>
           <Text style={styles.submittedBy}>
-            Submitted by: <Text style={styles.boldText}>{item.user}</Text>
+            Submitted by: <Text style={styles.boldText}>{submittedName}</Text>
           </Text>
         </View>
       </View>
@@ -51,37 +96,41 @@ const ServiceCard = ({ item, navigation }) => {
       <View style={styles.infoBox}>
         <View style={styles.dateRow}>
           <Calendar size={14} color="#94a3b8" />
-          <Text style={styles.dateText}>{item.date} • {item.time}</Text>
+          <Text style={styles.dateText}>{formatDate(item.preferred_date)}</Text>
         </View>
-        <TouchableOpacity style={styles.fileDownload}>
-          <Download size={14} color="#6366f1" />
-          <Text style={styles.fileName}>{item.fileName}</Text>
+        <TouchableOpacity
+          style={styles.fileDownload}
+          disabled={!item.document_url}
+          onPress={handleOpenDocument}>
+          <Download size={14} color="#1E3A8A" />
+          <Text style={styles.fileName}>{fileName}</Text>
         </TouchableOpacity>
       </View>
 
       {/* Actions */}
-      <View style={[styles.actionRow, isApproved && { opacity: 0.5 }]}>
+      <View style={[styles.actionRow, (isApproved || isBusy) && { opacity: 0.5 }]}>
         <TouchableOpacity 
-          disabled={isApproved}
+          disabled={isApproved || isBusy}
           style={[styles.btn, styles.btnAccept]}
-          onPress={() => navigation.navigate('AttyAcceptNotarialRequest', { title: item.title, user: item.user, caseId: '#NT-88293' })}
+          onPress={() => onAccept(item)}
         >
           <Check size={16} color="#166534" />
           <Text style={styles.btnTextAccept}>ACCEPT</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 
-          disabled={isApproved} 
+          disabled={isApproved || isBusy}
           style={styles.btnMoreInfo}
+          onPress={() => Alert.alert('Request Details', item.details || 'No additional details provided.')}
         >
           <MessageSquare size={16} color="#64748b" />
           <Text style={styles.btnTextMoreInfo}>MORE INFO</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 
-          disabled={isApproved}
+          disabled={isApproved || isBusy}
           style={styles.btnReject}
-          onPress={() => navigation.navigate('AttyNotarialRequestRejected', { title: item.title, user: item.user })}
+          onPress={() => onReject(item)}
         >
           <X size={16} color="#991b1b" />
           <Text style={styles.btnTextReject}>REJECT</Text>
@@ -96,11 +145,90 @@ const ServiceCard = ({ item, navigation }) => {
 };
 
 export default function NotarialServices({ navigation }) {
-  const data = [
-    { id: '1', title: 'Affidavit of Loss', status: 'PENDING REVIEW', user: 'Alice Cooper', date: 'Oct 28, 2024', time: '11:00 AM', fileName: 'affidavit_loss_draft.pdf' },
-    { id: '2', title: 'Deed of Sale', status: 'APPROVED', user: 'Bob Marley', date: 'Oct 29, 2024', time: '03:00 PM', fileName: 'property_sale_v2.pdf' },
-    { id: '3', title: 'Power of Attorney', status: 'REVISION REQUESTED', user: 'Charlie Brown', date: 'Oct 30, 2024', time: '09:15 AM', fileName: 'poa_draft_final.pdf' },
-  ];
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [processingId, setProcessingId] = useState(null);
+
+  const loadNotarialRequests = useCallback(async ({showSpinner = true} = {}) => {
+    try {
+      if (showSpinner) {
+        setLoading(true);
+      }
+      const records = await getNotarialRequests();
+      const mapped = (Array.isArray(records) ? records : []).map(item => ({
+        ...item,
+        status: mapStatus(item.status),
+      }));
+      setData(mapped);
+    } catch (error) {
+      Alert.alert('Error', error?.message || 'Failed to load notarial requests.');
+      setData([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadNotarialRequests({showSpinner: true});
+    }, [loadNotarialRequests]),
+  );
+
+  const handleRefresh = useCallback(() => {
+    setRefreshing(true);
+    loadNotarialRequests({showSpinner: false});
+  }, [loadNotarialRequests]);
+
+  const handleReject = useCallback(
+    item => {
+      Alert.alert('Reject Request', 'Are you sure you want to reject this request?', [
+        {text: 'Cancel', style: 'cancel'},
+        {
+          text: 'Reject',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setProcessingId(item.id);
+              await updateNotarialRequestStatus(item.id, 'rejected');
+              await loadNotarialRequests({showSpinner: false});
+              Alert.alert('Success', 'Notarial request rejected.');
+            } catch (error) {
+              Alert.alert('Error', error?.message || 'Unable to reject request.');
+            } finally {
+              setProcessingId(null);
+            }
+          },
+        },
+      ]);
+    },
+    [loadNotarialRequests],
+  );
+
+  const handleAccept = useCallback(
+    item => {
+      Alert.alert('Accept Request', 'Are you sure you want to accept this request?', [
+        {text: 'Cancel', style: 'cancel'},
+        {
+          text: 'Accept',
+          onPress: async () => {
+            try {
+              setProcessingId(item.id);
+              await updateNotarialRequestStatus(item.id, 'accepted');
+              await loadNotarialRequests({showSpinner: false});
+              Alert.alert('Success', 'Notarial request accepted.');
+            } catch (error) {
+              Alert.alert('Error', error?.message || 'Unable to accept request.');
+            } finally {
+              setProcessingId(null);
+            }
+          },
+        },
+      ]);
+    },
+    [loadNotarialRequests],
+  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -114,9 +242,35 @@ export default function NotarialServices({ navigation }) {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {data.map((item) => <ServiceCard key={item.id} item={item} navigation={navigation} />)}
-      </ScrollView>
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator color="#1e3a8a" />
+          <Text style={styles.emptyText}>Loading requests...</Text>
+        </View>
+      ) : (
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+          }>
+          {data.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyTitle}>No notarial requests yet</Text>
+              <Text style={styles.emptyText}>Client submissions will appear here automatically.</Text>
+            </View>
+          ) : (
+            data.map((item) => (
+              <ServiceCard
+                key={item.id}
+                item={item}
+                onAccept={handleAccept}
+                onReject={handleReject}
+                actionLoading={processingId === item.id}
+              />
+            ))
+          )}
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
@@ -127,12 +281,35 @@ const styles = StyleSheet.create({
     flexDirection: 'row', 
     alignItems: 'center', 
     padding: 20, 
-    backgroundColor: '#fff' 
+    backgroundColor: '#fff'
   },
   headerTitles: { marginLeft: 15 },
-  mainTitle: { fontSize: 20, fontWeight: 'bold', color: '#1e3a8a' },
+  mainTitle: { fontSize: 32, fontWeight: 'bold', color: '#1E3A8A' },
   subHeader: { fontSize: 10, color: '#94a3b8', letterSpacing: 0.5, marginTop: 2 },
   scrollContent: { padding: 16 },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyCard: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 20,
+    alignItems: 'center',
+    elevation: 2,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1e3a8a',
+  },
+  emptyText: {
+    fontSize: 13,
+    color: '#64748b',
+    marginTop: 8,
+    textAlign: 'center',
+  },
   card: { 
     backgroundColor: '#fff', 
     borderRadius: 20, 
@@ -144,7 +321,7 @@ const styles = StyleSheet.create({
   cardHeader: { flexDirection: 'row', marginBottom: 15 },
   iconContainer: { 
     width: 50, height: 50, borderRadius: 12, 
-    backgroundColor: '#f5f3ff', justifyContent: 'center', alignItems: 'center' 
+    backgroundColor: '#EEF2FF', justifyContent: 'center', alignItems: 'center' 
   },
   headerTextContent: { flex: 1, marginLeft: 12 },
   titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },

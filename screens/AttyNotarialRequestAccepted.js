@@ -14,9 +14,10 @@ const Calendar = (props) => <MaterialCommunityIcons name="calendar" {...props} /
 const Inbox = (props) => <MaterialCommunityIcons name="inbox" {...props} />;
 
 const RequestSuccessScreen = ({ navigation, route }) => {
-  const title = route?.params?.title || 'Affidavit of Loss';
-  const user = route?.params?.user || 'Alice Cooper';
-  const caseId = route?.params?.caseId || '#NT-88293';
+  const title = route?.params?.title || 'Notarial Request';
+  const user = route?.params?.user || 'Client';
+  const caseId = route?.params?.caseId || 'N/A';
+  const preferredDate = route?.params?.preferredDate || 'To be scheduled';
   
   return (
     <SafeAreaView style={styles.container}>
@@ -56,7 +57,7 @@ const RequestSuccessScreen = ({ navigation, route }) => {
             <View style={{ flex: 1 }}>
               <Text style={styles.label}>NEXT STEP</Text>
               <Text style={styles.value}>
-                Proceed with the scheduled consultation on <Text style={styles.blueValue}>Oct 28, 11:00 AM</Text>.
+                Proceed with the scheduled consultation on <Text style={styles.blueValue}>{preferredDate}</Text>.
               </Text>
             </View>
           </View>
@@ -67,17 +68,17 @@ const RequestSuccessScreen = ({ navigation, route }) => {
       <View style={styles.footer}>
         <TouchableOpacity 
           style={styles.primaryBtn}
-          onPress={() => navigation.navigate('AttyMyAppointments')}
+          onPress={() => navigation.navigate('AttyNotarialServices')}
         >
-          <Calendar size={20} color="#fff" style={{ marginRight: 10 }} />
-          <Text style={styles.primaryBtnText}>View My Schedule</Text>
+          <Inbox size={20} color="#fff" style={{ marginRight: 10 }} />
+          <Text style={styles.primaryBtnText}>Back to Inbox</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 
           style={styles.secondaryBtn}
-          onPress={() => navigation.navigate('AttyNotarialServices')}
+          onPress={() => navigation.navigate('AttyMyAppointments')}
         >
-          <Text style={styles.secondaryBtnText}>Back to Inbox</Text>
+          <Text style={styles.secondaryBtnText}>View My Schedule</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

@@ -13,8 +13,10 @@ const Info = (props) => <MaterialCommunityIcons name="information" {...props} />
 const ArrowLeft = (props) => <MaterialCommunityIcons name="arrow-left" {...props} />;
 
 const RequestRejectedScreen = ({ navigation, route }) => {
-  const title = route?.params?.title || 'Affidavit of Loss';
-  const user = route?.params?.user || 'Alice Cooper';
+  const title = route?.params?.title || 'Notarial Request';
+  const user = route?.params?.user || 'Client';
+  const caseId = route?.params?.caseId || 'N/A';
+  const reason = route?.params?.reason || 'Request declined by attorney.';
   
   return (
     <SafeAreaView style={styles.container}>
@@ -38,14 +40,14 @@ const RequestRejectedScreen = ({ navigation, route }) => {
         <View style={styles.infoCard}>
           <View style={styles.row}>
             <Text style={styles.label}>Case ID</Text>
-            <Text style={styles.caseId}>#NT-88293</Text>
+            <Text style={styles.caseId}>{caseId}</Text>
           </View>
 
           <View style={styles.divider} />
 
           <View style={styles.row}>
             <Text style={styles.label}>Reason</Text>
-            <Text style={styles.reasonValue}>Incomplete Information</Text>
+            <Text style={styles.reasonValue}>{reason}</Text>
           </View>
         </View>
 

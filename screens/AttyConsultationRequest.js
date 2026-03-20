@@ -11,6 +11,16 @@ import {
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {getMyAppointments, updateAppointmentStatus} from '../services/appointmentService';
 
+function resolveScheduleValue(item) {
+  return (
+    item?.scheduled_at ||
+    item?.preferred_date ||
+    item?.updated_at ||
+    item?.created_at ||
+    null
+  );
+}
+
 function formatDateTime(isoDateTime) {
   if (!isoDateTime) {
     return {date: 'No schedule', time: '--:--'};
@@ -83,7 +93,7 @@ export default function AttyConsultationRequest({navigation}) {
 
   const renderRow = ({item}) => {
     const status = (item.status ?? 'pending').toUpperCase();
-    const {date, time} = formatDateTime(item.scheduled_at);
+    const {date, time} = formatDateTime(resolveScheduleValue(item));
 
     return (
       <View style={styles.card}>
@@ -102,18 +112,37 @@ export default function AttyConsultationRequest({navigation}) {
         <Text style={styles.metaText}>📝 {item.notes || 'No details provided'}</Text>
 
         {tab === 'pending' ? (
-          <View style={styles.actionRow}>
+          <>
+            <View style={styles.actionRow}>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.rejectButton]}
+                onPress={() => handleUpdate(item.id, 'cancelled')}>
+                <Text style={styles.rejectText}>Reject</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.approveButton]}
+                onPress={() => handleUpdate(item.id, 'confirmed')}>
+                <Text style={styles.approveText}>Approve</Text>
+              </TouchableOpacity>
+            </View>
             <TouchableOpacity
-              style={[styles.actionButton, styles.rejectButton]}
-              onPress={() => handleUpdate(item.id, 'cancelled')}>
-              <Text style={styles.rejectText}>Reject</Text>
+              style={styles.chatButtonSecondary}
+              onPress={() =>
+                navigation.navigate('AttyConsultationMessage', {
+                  chatId: item.id,
+                  clientName: item.client_name ?? 'Client',
+                  clientInitials: (item.client_name ?? 'Client')
+                    .split(' ')
+                    .filter(Boolean)
+                    .map(part => part[0])
+                    .join('')
+                    .slice(0, 2)
+                    .toUpperCase(),
+                })
+              }>
+              <Text style={styles.chatButtonSecondaryText}>Open Chat</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.approveButton]}
-              onPress={() => handleUpdate(item.id, 'confirmed')}>
-              <Text style={styles.approveText}>Approve</Text>
-            </TouchableOpacity>
-          </View>
+          </>
         ) : (
           <TouchableOpacity
             style={styles.chatButton}
@@ -257,6 +286,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   chatButtonText: {color: '#FFFFFF', fontWeight: '700'},
+  chatButtonSecondary: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#0F172A',
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  chatButtonSecondaryText: {color: '#0F172A', fontWeight: '700'},
   emptyState: {flex: 1, alignItems: 'center', justifyContent: 'center'},
   emptyText: {marginTop: 8, color: '#64748B'},
 });
