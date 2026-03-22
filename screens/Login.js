@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useState, useEffect} from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import {useUserProfile} from '../context/UserProfileContext';
-import {signInWithEmail} from '../services/authService';
+import {signInWithEmail, checkEmailLockout} from '../services/authService';
 import {getMyProfile} from '../services/profileService';
 
 const colors = {
@@ -34,6 +34,53 @@ export default function Login({navigation}) {
   const [rememberMe, setRememberMe] = useState(false);
   const [focusedField, setFocusedField] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [lockoutSeconds, setLockoutSeconds] = useState(0);
+  const [lockedEmail, setLockedEmail] = useState(null);
+
+  useEffect(() => {
+    let interval = null;
+    if (lockoutSeconds > 0) {
+      interval = setInterval(() => {
+        setLockoutSeconds(prev => prev - 1);
+      }, 1000);
+    } else if (interval) {
+      clearInterval(interval);
+    }
+    return () => clearInterval(interval);
+  }, [lockoutSeconds]);
+
+  const formatLockoutTime = (totalSeconds) => {
+    const min = Math.floor(totalSeconds / 60);
+    const sec = totalSeconds % 60;
+    return `${min}:${sec < 10 ? '0' : ''}${sec}`;
+  };
+
+  const handleEmailBlur = async () => {
+    setFocusedField(null);
+    if (!email.trim() || !email.includes('@')) return;
+    try {
+      const timeRemaining = await checkEmailLockout(email.trim());
+      if (timeRemaining > 0) {
+        setLockoutSeconds(Math.ceil(timeRemaining));
+        setLockedEmail(email.trim().toLowerCase());
+      } else if (email.trim().toLowerCase() === lockedEmail) {
+        setLockoutSeconds(0);
+        setLockedEmail(null);
+      }
+    } catch (e) {
+      // Background check failed, ignore
+    }
+  };
+
+  const handleEmailChange = (text) => {
+    setEmail(text);
+    if (lockoutSeconds > 0 && text.trim().toLowerCase() !== lockedEmail) {
+      setLockoutSeconds(0);
+    } else if (text.trim().toLowerCase() === lockedEmail && lockoutSeconds === 0) {
+      // Recalculate if they switch back to the locked email
+      handleEmailBlur();
+    }
+  };
 
   const handleLogin = async () => {
     if (!email) return Alert.alert('Error', 'Email is required');
@@ -51,15 +98,9 @@ export default function Login({navigation}) {
       });
 
       const user = data?.user;
-      let backendProfile = null;
-      try {
-        backendProfile = await getMyProfile();
-      } catch (_) {
-        backendProfile = null;
-      }
 
-      const roleFromApi = user?.role ?? backendProfile?.role;
-      const fullNameFromApi = user?.name ?? backendProfile?.full_name;
+      const roleFromApi = user?.role;
+      const fullNameFromApi = user?.name;
       const normalizedRole =
         String(roleFromApi || '').toLowerCase() === 'attorney'
           ? 'Attorney'
@@ -70,10 +111,10 @@ export default function Login({navigation}) {
             : 'Attorney';
 
       updateProfile({
-        email: backendProfile?.email ?? user?.email ?? email.trim(),
+        email: user?.email ?? email.trim(),
         name: fullNameFromApi ?? 'BatasMo User',
-        phone: backendProfile?.phone ?? '',
-        address: backendProfile?.address ?? '',
+        phone: user?.phone ?? '',
+        address: user?.address ?? '',
         role: normalizedRole,
       });
 
@@ -101,6 +142,21 @@ export default function Login({navigation}) {
         return;
       }
 
+      if (error?.message?.startsWith('LOCKOUT:')) {
+        const timeRemaining = parseInt(error.message.split(':')[1], 10);
+        setLockoutSeconds(timeRemaining);
+        setLockedEmail(email.trim().toLowerCase());
+        Alert.alert('Login Failed', 'Account locked due to 3 consecutive failed login attempts. Please wait for the timer to expire.');
+        return;
+      }
+
+      if (normalized.includes('account locked')) {
+        setLockoutSeconds(15 * 60);
+        setLockedEmail(email.trim().toLowerCase());
+        Alert.alert('Login Failed', error?.message ?? 'Account locked due to 3 consecutive failed login attempts.');
+        return;
+      }
+
       Alert.alert('Login Failed', error?.message ?? 'Unable to sign in.');
     } finally {
       setIsSubmitting(false);
@@ -113,6 +169,7 @@ export default function Login({navigation}) {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
         contentContainerStyle={styles.scrollContent}>
         <View style={styles.heroSection}>
           <View style={styles.heroBadge}>
@@ -125,7 +182,11 @@ export default function Login({navigation}) {
         <View style={styles.formContainer}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => navigation.goBack()}>
+            onPress={() => {
+              try {
+                navigation.goBack();
+              } catch(e) {}
+            }}>
             <Text style={styles.backButtonText}>← Back</Text>
           </TouchableOpacity>
 
@@ -133,16 +194,12 @@ export default function Login({navigation}) {
             <TouchableOpacity
               style={[styles.toggleOption, isClient && styles.activeToggle]}
               onPress={() => setIsClient(true)}>
-              <Text style={[styles.toggleText, isClient && styles.activeText]}>
-                CLIENT
-              </Text>
+              <Text style={[styles.toggleText, isClient && styles.activeText]}>Client</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.toggleOption, !isClient && styles.activeToggle]}
               onPress={() => setIsClient(false)}>
-              <Text style={[styles.toggleText, !isClient && styles.activeText]}>
-                ATTORNEY
-              </Text>
+              <Text style={[styles.toggleText, !isClient && styles.activeText]}>Attorney</Text>
             </TouchableOpacity>
           </View>
 
@@ -158,11 +215,14 @@ export default function Login({navigation}) {
               placeholder="name@domain.com"
               placeholderTextColor="#94A3B8"
               value={email}
-              onChangeText={setEmail}
+              onChangeText={handleEmailChange}
+              maxLength={150}
               keyboardType="email-address"
               autoCapitalize="none"
               onFocus={() => setFocusedField('email')}
-              onBlur={() => setFocusedField(null)}
+              onBlur={handleEmailBlur}
+              editable={lockoutSeconds === 0}
+              selectTextOnFocus={lockoutSeconds === 0}
             />
           </View>
 
@@ -179,11 +239,14 @@ export default function Login({navigation}) {
               placeholderTextColor="#94A3B8"
               value={password}
               onChangeText={setPassword}
+              maxLength={64}
               secureTextEntry={!showPassword}
               onFocus={() => setFocusedField('password')}
               onBlur={() => setFocusedField(null)}
+              editable={lockoutSeconds === 0}
+              selectTextOnFocus={lockoutSeconds === 0}
             />
-            <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+            <TouchableOpacity onPress={() => lockoutSeconds === 0 && setShowPassword(!showPassword)}>
               <Text style={styles.passwordToggleText}>
                 {showPassword ? 'Hide' : 'Show'}
               </Text>
@@ -209,11 +272,13 @@ export default function Login({navigation}) {
           </View>
 
           <TouchableOpacity
-            style={[styles.loginButton, isSubmitting && styles.loginButtonDisabled]}
+            style={[styles.loginButton, (isSubmitting || lockoutSeconds > 0) && styles.loginButtonDisabled]}
             onPress={handleLogin}
-            disabled={isSubmitting}>
+            disabled={isSubmitting || lockoutSeconds > 0}>
             <Text style={styles.loginButtonText}>
-              {isSubmitting ? 'Logging In...' : 'Log In'}
+              {lockoutSeconds > 0 
+                ? `Locked (${formatLockoutTime(lockoutSeconds)})` 
+                : isSubmitting ? 'Logging In...' : 'Log In'}
             </Text>
           </TouchableOpacity>
 

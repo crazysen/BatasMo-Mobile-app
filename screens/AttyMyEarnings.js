@@ -115,7 +115,7 @@ export default function MyEarnings({ navigation }) {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+        <TouchableOpacity onPress={() => navigation.canGoBack() ? navigation.goBack() : null}>
           <ArrowLeft size={24} color="#1E3A8A" />
         </TouchableOpacity>
         <View style={{ marginLeft: 15 }}>

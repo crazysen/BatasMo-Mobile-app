@@ -1,4 +1,4 @@
-import React, {createContext, useContext, useMemo, useState} from 'react';
+import React, {createContext, useContext, useMemo, useState, useCallback} from 'react';
 
 const UserProfileContext = createContext(null);
 
@@ -7,18 +7,21 @@ const initialProfile = {
   email: '',
   phone: '',
   address: '',
+  age: '',
+  guardian_name: '',
+  guardian_contact: '',
   role: 'Client',
 };
 
 export const UserProfileProvider = ({children}) => {
   const [profile, setProfile] = useState(initialProfile);
 
-  const updateProfile = updates => {
+  const updateProfile = useCallback((updates) => {
     setProfile(previous => ({
       ...previous,
       ...updates,
     }));
-  };
+  }, []);
 
   const value = useMemo(
     () => ({
@@ -26,7 +29,7 @@ export const UserProfileProvider = ({children}) => {
       updateProfile,
       setProfile,
     }),
-    [profile],
+    [profile, updateProfile],
   );
 
   return (

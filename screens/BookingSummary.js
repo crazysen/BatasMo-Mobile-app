@@ -18,7 +18,7 @@ export default function BookingSummary({navigation, route}) {
   };
 
   const handleClose = () => {
-    navigation.goBack();
+    navigation.canGoBack() ? navigation.goBack() : null;
   };
 
   const PaymentOption = ({ id, label, icon, color }) => (

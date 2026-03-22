@@ -48,6 +48,7 @@ import AttySuccessWithdrawal from './screens/AttySuccessWithdrawal';
 import AttyProfileSettings from './screens/AttyProfileSettings';
 import AttyAvailabilityManager from './screens/AttyAvailabilityManager';
 import AttyMyAppointments from './screens/AttyMyAppointments';
+import AdminCreateAttorney from './screens/AdminCreateAttorney';
 
 const Stack = createNativeStackNavigator();
 
@@ -114,6 +115,7 @@ function App() {
           <Stack.Screen name="AttySuccessWithdrawal" component={AttySuccessWithdrawal} />
           <Stack.Screen name="AttyProfileSettings" component={AttyProfileSettings} />
           <Stack.Screen name="AttyMyAppointments" component={AttyMyAppointments} />
+          <Stack.Screen name="AdminCreateAttorney" component={AdminCreateAttorney} />
         </Stack.Navigator>
       </NavigationContainer>
     </UserProfileProvider>

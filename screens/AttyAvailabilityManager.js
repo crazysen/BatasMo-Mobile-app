@@ -1,54 +1,89 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   StyleSheet, 
   Text, 
   View, 
   ScrollView, 
-  TouchableOpacity 
+  TouchableOpacity,
+  ActivityIndicator,
+  Alert,
+  Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { useUserProfile } from '../context/UserProfileContext';
+import { getAvailability, setAvailability } from '../services/appointmentService';
 
 const ChevronLeft = (props) => <MaterialCommunityIcons name="chevron-left" {...props} />;
-const ChevronRight = (props) => <MaterialCommunityIcons name="chevron-right" {...props} />;
-const Clock = (props) => <MaterialCommunityIcons name="clock-outline" {...props} />;
-const Plus = (props) => <MaterialCommunityIcons name="plus" {...props} />;
-const CheckCircle2 = (props) => <MaterialCommunityIcons name="check-circle" {...props} />;
+const CalendarIcon = (props) => <MaterialCommunityIcons name="calendar" {...props} />;
+const CheckCircle = (props) => <MaterialCommunityIcons name="check-circle" {...props} />;
 
-const AvailabilityManager = ({ navigation }) => {
-  const [selectedDate, setSelectedDate] = useState(15);
+const ALL_SLOTS = [
+  '08:00 AM', '09:00 AM', '10:00 AM', '11:00 AM',
+  '12:00 PM', '01:00 PM', '02:00 PM', '03:00 PM',
+  '04:00 PM', '05:00 PM', '06:00 PM'
+];
 
-  const dates = [
-    { day: 'SUN', date: 15, active: true },
-    { day: 'MON', date: 16 },
-    { day: 'TUE', date: 17 },
-    { day: 'WED', date: 18 },
-    { day: 'THU', date: 19 },
-  ];
+export default function AvailabilityManager({ navigation }) {
+  const { profile } = useUserProfile();
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [showPicker, setShowPicker] = useState(false);
+  
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [activeSlots, setActiveSlots] = useState([]);
 
-  const slots = [
-    '09:00 AM', '10:00 AM', '11:00 AM', '01:00 PM', 
-    '02:00 PM', '03:00 PM', '04:00 PM'
-  ];
+  const formattedDate = selectedDate.toISOString().split('T')[0];
 
-  const weeklyHours = [
-    { day: 'Monday', range: '09:00 AM - 05:00 PM' },
-    { day: 'Tuesday', range: '09:00 AM - 05:00 PM' },
-    { day: 'Wednesday', range: '09:00 AM - 05:00 PM' },
-    { day: 'Thursday', range: '09:00 AM - 05:00 PM' },
-    { day: 'Friday', range: '09:00 AM - 05:00 PM' },
-  ];
+  const fetchSlots = useCallback(async () => {
+    if (!profile?.id) return;
+    try {
+      setLoading(true);
+      const slots = await getAvailability(profile.id, formattedDate);
+      const mapped = slots.map(s => s.time);
+      setActiveSlots(mapped);
+    } catch (e) {
+      Alert.alert('Error', 'Failed to load availability for this date.');
+    } finally {
+      setLoading(false);
+    }
+  }, [profile?.id, formattedDate]);
 
-  const handleSave = () => {
-    // Save availability logic here
-    navigation.goBack();
+  useEffect(() => {
+    fetchSlots();
+  }, [fetchSlots]);
+
+  const toggleSlot = (time) => {
+    setActiveSlots(prev => 
+      prev.includes(time) ? prev.filter(t => t !== time) : [...prev, time]
+    );
+  };
+
+  const handleSave = async () => {
+    try {
+      setSaving(true);
+      await setAvailability(formattedDate, activeSlots);
+      Alert.alert('Success', 'Availability saved for ' + formattedDate);
+    } catch (e) {
+      console.error('Save availability error:', e);
+      Alert.alert('Error', `Failed to save: ${e.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const onChangeDate = (event, date) => {
+    if (Platform.OS === 'android') setShowPicker(false);
+    if (date) {
+      setSelectedDate(date);
+    }
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+        <TouchableOpacity onPress={() => navigation.canGoBack() ? navigation.goBack() : null}>
           <ChevronLeft color="#1a2b5d" size={28} />
         </TouchableOpacity>
         <View>
@@ -59,75 +94,71 @@ const AvailabilityManager = ({ navigation }) => {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         
-        {/* Date Selector Card */}
         <View style={styles.card}>
-          <View style={styles.monthHeader}>
-            <Text style={styles.sectionTitle}>October 2024</Text>
-            <View style={styles.navArrows}>
-              <TouchableOpacity style={styles.arrowBtn}><ChevronLeft size={18} color="#999" /></TouchableOpacity>
-              <TouchableOpacity style={styles.arrowBtn}><ChevronRight size={18} color="#999" /></TouchableOpacity>
-            </View>
-          </View>
-
-          <View style={styles.dateStrip}>
-            {dates.map((item) => (
-              <TouchableOpacity 
-                key={item.date} 
-                style={[styles.dateBox, item.date === selectedDate && styles.activeDateBox]}
-                onPress={() => setSelectedDate(item.date)}
-              >
-                <Text style={[styles.dayText, item.date === selectedDate && styles.activeText]}>{item.day}</Text>
-                <Text style={[styles.dateNumber, item.date === selectedDate && styles.activeText]}>{item.date}</Text>
-                {item.date === selectedDate && <View style={styles.dot} />}
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-            <Text style={styles.saveBtnText}>Save Changes</Text>
+          <Text style={styles.sectionTitle}>Select Date</Text>
+          <Text style={styles.subText}>Pick a date to set your availability.</Text>
+          
+          <TouchableOpacity style={styles.dateSelector} onPress={() => setShowPicker(true)}>
+            <CalendarIcon size={24} color="#3b82f6" />
+            <Text style={styles.dateSelectorText}>
+              {selectedDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+            </Text>
           </TouchableOpacity>
+
+          {(showPicker || Platform.OS === 'ios') && (
+            <DateTimePicker
+              value={selectedDate}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              onChange={onChangeDate}
+              minimumDate={new Date()}
+            />
+          )}
+
+          {Platform.OS === 'ios' && showPicker && (
+            <TouchableOpacity style={styles.iosConfirm} onPress={() => setShowPicker(false)}>
+              <Text style={styles.iosConfirmText}>Confirm Date</Text>
+            </TouchableOpacity>
+          )}
+
         </View>
 
-        {/* Available Slots Section */}
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Available Slots</Text>
-          <Text style={styles.subText}>Clients can book these time slots.</Text>
-          <TouchableOpacity><Text style={styles.addBulkText}>+ Add Bulk Slots</Text></TouchableOpacity>
+          <Text style={styles.subText}>Tap to toggle slots for {formattedDate}.</Text>
 
-          <View style={styles.slotsGrid}>
-            {slots.map((time, index) => (
-              <View key={index} style={styles.slotItem}>
-                <Clock size={16} color="#666" style={{ marginRight: 8 }} />
-                <Text style={styles.slotText}>{time}</Text>
-              </View>
-            ))}
-            <TouchableOpacity style={[styles.slotItem, styles.newSlotItem]}>
-              <Plus size={16} color="#666" />
-              <Text style={styles.newSlotText}>New Slot</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+          {loading ? (
+            <View style={styles.loaderArea}>
+              <ActivityIndicator size="large" color="#001d57" />
+              <Text style={styles.loaderText}>Loading slots...</Text>
+            </View>
+          ) : (
+            <View style={styles.slotsGrid}>
+              {ALL_SLOTS.map((time) => {
+                const isSelected = activeSlots.includes(time);
+                return (
+                  <TouchableOpacity 
+                    key={time} 
+                    style={[styles.slotItem, isSelected && styles.slotItemActive]}
+                    onPress={() => toggleSlot(time)}
+                  >
+                    <Text style={[styles.slotText, isSelected && styles.slotTextActive]}>{time}</Text>
+                    {isSelected && <CheckCircle size={14} color="#fff" style={{ marginLeft: 4 }} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
 
-        {/* Weekly Hours Section */}
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Typical Weekly Hours</Text>
-          <View style={{ marginTop: 15 }}>
-            {weeklyHours.map((item, index) => (
-              <View key={index} style={styles.weeklyRow}>
-                <View style={styles.dayCheck}>
-                  <CheckCircle2 size={22} color="#001d57" fill="#001d57" />
-                  <Text style={styles.dayLabel}>{item.day}</Text>
-                </View>
-                <Text style={styles.timeRange}>{item.range}</Text>
-              </View>
-            ))}
-          </View>
+          <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={saving || loading}>
+            <Text style={styles.saveBtnText}>{saving ? 'Saving...' : 'Save Changes'}</Text>
+          </TouchableOpacity>
         </View>
 
       </ScrollView>
     </SafeAreaView>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f4f5f7' },
@@ -150,46 +181,63 @@ const styles = StyleSheet.create({
     shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 
   },
   sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#001d57' },
-  monthHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  navArrows: { flexDirection: 'row' },
-  arrowBtn: { borderWidth: 1, borderColor: '#eee', borderRadius: 8, padding: 4, marginLeft: 8 },
-  dateStrip: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 25 },
-  dateBox: { 
-    alignItems: 'center', 
-    padding: 10, 
-    borderRadius: 12, 
-    width: '18%', 
-    backgroundColor: '#fff' 
+  subText: { fontSize: 13, color: '#888', marginTop: 4, marginBottom: 15 },
+  dateSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#eff6ff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    marginBottom: 5,
   },
-  activeDateBox: { backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#3b82f6' },
-  dayText: { fontSize: 12, color: '#999', fontWeight: '600' },
-  dateNumber: { fontSize: 18, fontWeight: 'bold', color: '#333', marginTop: 4 },
-  activeText: { color: '#2563eb' },
-  dot: { width: 4, height: 4, backgroundColor: '#facc15', borderRadius: 2, marginTop: 4 },
-  saveBtn: { backgroundColor: '#001d57', padding: 15, borderRadius: 10, alignItems: 'center' },
-  saveBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
-  subText: { fontSize: 13, color: '#888', marginTop: 4 },
-  addBulkText: { color: '#eab308', fontWeight: 'bold', fontSize: 14, marginTop: 10, marginBottom: 20 },
-  slotsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  dateSelectorText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1e3a8a',
+    marginLeft: 10,
+  },
+  iosConfirm: {
+    alignSelf: 'flex-end',
+    padding: 10,
+  },
+  iosConfirmText: {
+    color: '#2563eb',
+    fontWeight: 'bold',
+  },
+  loaderArea: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  loaderText: {
+    marginTop: 10,
+    color: '#666',
+  },
+  slotsGrid: { 
+    flexDirection: 'row', 
+    flexWrap: 'wrap', 
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
   slotItem: { 
-    width: '48%', 
+    width: '31%', 
     borderWidth: 1, 
-    borderColor: '#eee', 
-    borderStyle: 'dashed', 
+    borderColor: '#ddd', 
     borderRadius: 10, 
-    padding: 15, 
+    paddingVertical: 12, 
     flexDirection: 'row', 
     alignItems: 'center', 
     justifyContent: 'center', 
-    marginBottom: 12 
+    marginBottom: 12,
+    backgroundColor: '#fafafa',
   },
-  slotText: { fontWeight: '600', color: '#333' },
-  newSlotItem: { backgroundColor: '#f9fafb' },
-  newSlotText: { color: '#666', fontSize: 13, marginLeft: 5 },
-  weeklyRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 12 },
-  dayCheck: { flexDirection: 'row', alignItems: 'center' },
-  dayLabel: { marginLeft: 10, color: '#333', fontWeight: '500' },
-  timeRange: { color: '#888', fontSize: 13 }
+  slotItemActive: {
+    backgroundColor: '#001d57',
+    borderColor: '#001d57',
+  },
+  slotText: { fontWeight: '600', color: '#555', fontSize: 12 },
+  slotTextActive: { color: '#fff' },
+  saveBtn: { backgroundColor: '#001d57', padding: 16, borderRadius: 12, alignItems: 'center' },
+  saveBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
 });
-
-export default AvailabilityManager;

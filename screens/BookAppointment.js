@@ -4,6 +4,7 @@ import {
   Alert,
   FlatList,
   Image,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -57,6 +58,13 @@ const AttorneyCard = ({item, navigation}) => (
 export default function BookAppointment({navigation}) {
   const [attorneys, setAttorneys] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedSpecialty, setSelectedSpecialty] = useState('All');
+
+  const specialties = ['All', 'Corporate Law', 'Family Law', 'Property Law', 'Criminal Law'];
+
+  const filteredAttorneys = selectedSpecialty === 'All' 
+    ? attorneys 
+    : attorneys.filter(a => a.specialty?.includes(selectedSpecialty) || a.specialty === selectedSpecialty);
 
   const loadAttorneys = useCallback(async () => {
     try {
@@ -96,7 +104,7 @@ export default function BookAppointment({navigation}) {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => navigation.goBack()}>
+          onPress={() => navigation.canGoBack() ? navigation.goBack() : null}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
 
@@ -104,6 +112,20 @@ export default function BookAppointment({navigation}) {
           <Text style={styles.mainTitle}>Book an Appointment</Text>
           <Text style={styles.subtitle}>Choose from our experienced attorneys</Text>
         </View>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
+          {specialties.map(spec => (
+            <TouchableOpacity 
+              key={spec} 
+              style={[styles.filterChip, selectedSpecialty === spec && styles.activeFilterChip]}
+              onPress={() => setSelectedSpecialty(spec)}
+            >
+              <Text style={[styles.filterText, selectedSpecialty === spec && styles.activeFilterText]}>
+                {spec}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </View>
 
       {loading ? (
@@ -117,7 +139,7 @@ export default function BookAppointment({navigation}) {
         </View>
       ) : (
         <FlatList
-          data={attorneys}
+          data={filteredAttorneys}
           keyExtractor={item => item.id}
           renderItem={({item}) => <AttorneyCard item={item} navigation={navigation} />}
           contentContainerStyle={styles.listContent}
@@ -164,6 +186,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 20,
   },
+  filterContainer: { marginTop: 15, marginBottom: 5 },
+  filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: '#E2E8F0', marginRight: 10 },
+  activeFilterChip: { backgroundColor: '#0F172A' },
+  filterText: { color: '#475569', fontWeight: '600', fontSize: 13 },
+  activeFilterText: { color: '#FFF' },
   emptyContainer: {
     flex: 1,
     alignItems: 'center',

@@ -61,7 +61,15 @@ const AttorneyDashboard = ({navigation}) => {
 
   const recentConsultations = appointments.slice(0, 3).map(item => {
     const scheduleValue = resolveScheduleValue(item);
-    const dateValue = scheduleValue ? new Date(String(scheduleValue).replace(' ', 'T')) : null;
+    let dateValue = null;
+    if (scheduleValue) {
+      const match = String(scheduleValue).trim().match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+      if (match) {
+        dateValue = new Date(match[1], Number(match[2]) - 1, match[3], match[4], match[5]);
+      } else {
+        dateValue = new Date(String(scheduleValue).replace(' ', 'T'));
+      }
+    }
     return {
       id: item.id,
       name: item.client_name || 'Client',

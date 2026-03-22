@@ -30,7 +30,7 @@ export default function PaymentMethod({navigation, route}) {
   };
 
   const handleCancel = () => {
-    navigation.goBack();
+    navigation.canGoBack() ? navigation.goBack() : null;
   };
 
   return (

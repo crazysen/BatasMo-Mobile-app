@@ -9,7 +9,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import {updateAppointmentStatus} from '../services/appointmentService';
+import {updateAppointmentStatus, createAppointment} from '../services/appointmentService';
 import {updateNotarialRequestStatus} from '../services/notarialService';
 
 export default function Payment({navigation, route}) {
@@ -38,9 +38,16 @@ export default function Payment({navigation, route}) {
   };
 
   const completePaidService = async () => {
-    if (!paymentContext?.sourceType || !paymentContext?.sourceId) {
+    if (!paymentContext?.sourceType) {
       return;
     }
+
+    if (paymentContext.sourceType === 'appointment_booking' && paymentContext.payload) {
+      await createAppointment(paymentContext.payload);
+      return;
+    }
+
+    if (!paymentContext?.sourceId) return;
 
     if (paymentContext.sourceType === 'appointment') {
       await updateAppointmentStatus(paymentContext.sourceId, 'completed');
@@ -76,7 +83,7 @@ export default function Payment({navigation, route}) {
   };
 
   const handleCancel = () => {
-    navigation.goBack();
+    navigation.canGoBack() ? navigation.goBack() : null;
   };
 
   const handleKeyPress = (digit) => {

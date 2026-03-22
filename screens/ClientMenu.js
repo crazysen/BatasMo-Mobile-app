@@ -59,7 +59,7 @@ export default function ClientMenu({navigation, route}) {
         <View style={styles.headerRow}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => navigation.goBack()}>
+            onPress={() => navigation.canGoBack() ? navigation.goBack() : null}>
             <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
         </View>

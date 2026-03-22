@@ -91,7 +91,7 @@ export default function ResetPassword({navigation}) {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.contentWrap}>
-        <TouchableOpacity style={styles.backArrow} onPress={() => navigation.goBack()}>
+        <TouchableOpacity style={styles.backArrow} onPress={() => navigation.canGoBack() ? navigation.goBack() : null}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
 

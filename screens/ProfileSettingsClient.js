@@ -19,6 +19,9 @@ const ProfileSettingsClient = ({navigation}) => {
   const [email, setEmail] = useState(profile.email);
   const [phone, setPhone] = useState(profile.phone);
   const [address, setAddress] = useState(profile.address);
+  const [age, setAge] = useState(profile.age?.toString() || '');
+  const [guardianName, setGuardianName] = useState(profile.guardian_name || '');
+  const [guardianContact, setGuardianContact] = useState(profile.guardian_contact || '');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -31,17 +34,26 @@ const ProfileSettingsClient = ({navigation}) => {
         const resolvedEmail = data?.email ?? profile.email;
         const resolvedPhone = data?.phone ?? profile.phone;
         const resolvedAddress = data?.address ?? profile.address;
+        const resolvedAge = data?.age ?? profile.age ?? '';
+        const resolvedGuardianName = data?.guardian_name ?? profile.guardian_name ?? '';
+        const resolvedGuardianContact = data?.guardian_contact ?? profile.guardian_contact ?? '';
 
         setName(resolvedName || '');
         setEmail(resolvedEmail || '');
         setPhone(resolvedPhone || '');
         setAddress(resolvedAddress || '');
+        setAge(resolvedAge !== null && resolvedAge !== undefined ? String(resolvedAge) : '');
+        setGuardianName(resolvedGuardianName || '');
+        setGuardianContact(resolvedGuardianContact || '');
 
         updateProfile({
           name: resolvedName || '',
           email: resolvedEmail || '',
           phone: resolvedPhone || '',
           address: resolvedAddress || '',
+          age: resolvedAge,
+          guardian_name: resolvedGuardianName,
+          guardian_contact: resolvedGuardianContact,
           role: (data?.role || profile.role || 'client').toLowerCase() === 'attorney' ? 'Attorney' : 'Client',
         });
       } catch (error) {
@@ -76,6 +88,9 @@ const ProfileSettingsClient = ({navigation}) => {
         full_name: name.trim(),
         phone: phone.trim(),
         address: address.trim(),
+        age: age ? parseInt(age, 10) : null,
+        guardian_name: guardianName.trim(),
+        guardian_contact: guardianContact.trim(),
         role: 'client',
       });
 
@@ -100,7 +115,7 @@ const ProfileSettingsClient = ({navigation}) => {
     setEmail(profile.email);
     setPhone(profile.phone);
     setAddress(profile.address);
-    navigation.goBack();
+    navigation.canGoBack() ? navigation.goBack() : null;
   };
 
   const initials = name
@@ -114,7 +129,7 @@ const ProfileSettingsClient = ({navigation}) => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+        <TouchableOpacity style={styles.backButton} onPress={() => navigation.canGoBack() ? navigation.goBack() : null}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Profile Settings</Text>
@@ -165,6 +180,35 @@ const ProfileSettingsClient = ({navigation}) => {
             keyboardType="phone-pad"
             placeholder="09xxxxxxxxx"
           />
+
+          <Text style={styles.label}>Age</Text>
+          <TextInput
+            style={styles.input}
+            value={age}
+            onChangeText={setAge}
+            keyboardType="number-pad"
+            placeholder="e.g. 25"
+          />
+
+          {age && parseInt(age, 10) < 18 && (
+            <>
+              <Text style={styles.label}>Guardian Full Name</Text>
+              <TextInput
+                style={styles.input}
+                value={guardianName}
+                onChangeText={setGuardianName}
+                placeholder="Parent/Guardian Name"
+              />
+              <Text style={styles.label}>Guardian Contact Number</Text>
+              <TextInput
+                style={styles.input}
+                value={guardianContact}
+                onChangeText={setGuardianContact}
+                placeholder="09171234567"
+                keyboardType="phone-pad"
+              />
+            </>
+          )}
 
           <Text style={styles.label}>Address</Text>
           <TextInput

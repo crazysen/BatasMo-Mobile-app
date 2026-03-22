@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 
-const ENV_API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
+const ENV_API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL?.replace('192.168.1.64', '192.168.1.75');
 const AUTH_TOKEN_KEY = 'auth_token';
 const API_TIMEOUT_MS = 20000;
 

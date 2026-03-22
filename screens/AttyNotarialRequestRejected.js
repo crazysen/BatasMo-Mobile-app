@@ -62,7 +62,7 @@ const RequestRejectedScreen = ({ navigation, route }) => {
 
       {/* Footer Actions */}
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.canGoBack() ? navigation.goBack() : null}>
           <Text style={styles.backBtnText}>Back to Inbox</Text>
         </TouchableOpacity>
       </View>

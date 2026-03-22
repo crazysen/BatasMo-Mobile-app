@@ -59,7 +59,7 @@ export default function PayoutDetails({ navigation }) {
       
       {/* Header */}
       <View style={styles.navHeader}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+        <TouchableOpacity onPress={() => navigation.canGoBack() ? navigation.goBack() : null}>
           <ChevronLeft size={28} color="#1E3A8A" />
         </TouchableOpacity>
         <Text style={styles.navTitle}>Payout Details</Text>

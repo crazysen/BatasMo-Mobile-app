@@ -19,13 +19,18 @@ const lightGray = '#F3F4F6';
 
 export default function CreateAccount({ navigation }) {
   const {updateProfile} = useUserProfile();
-  const [isClient, setIsClient] = useState(false);
+  const [isClient, setIsClient] = useState(true);
+  const [contactNumber, setContactNumber] = useState('');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [age, setAge] = useState('');
+  const [address, setAddress] = useState('');
+  const [guardianName, setGuardianName] = useState('');
+  const [guardianContact, setGuardianContact] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const validateAndSubmit = async () => {
@@ -41,6 +46,21 @@ export default function CreateAccount({ navigation }) {
     if (password !== confirmPassword)
       return Alert.alert('Error', 'Passwords do not match');
 
+    if (!contactNumber) return Alert.alert('Error', 'Contact number is required');
+    if (!/^\d+$/.test(contactNumber)) return Alert.alert('Error', 'Contact number must contain only numbers');
+    if (contactNumber.length < 10 || contactNumber.length > 13) return Alert.alert('Error', 'Contact number must be 10-13 digits');
+    if (!contactNumber.startsWith('0') && !contactNumber.startsWith('9')) return Alert.alert('Error', 'Contact number must start with 0 or 9 (e.g. 09171234567)');
+
+    if (!age) return Alert.alert('Error', 'Age is required');
+    if (isNaN(age) || parseInt(age) < 1) return Alert.alert('Error', 'Enter a valid age');
+    if (!address) return Alert.alert('Error', 'Address is required');
+
+    const parsedAge = parseInt(age);
+    if (parsedAge < 18) {
+      if (!guardianName) return Alert.alert('Error', 'Guardian full name is required for minors');
+      if (!guardianContact) return Alert.alert('Error', 'Guardian contact number is required for minors');
+    }
+
     const role = isClient ? 'Client' : 'Attorney';
 
     try {
@@ -51,11 +71,21 @@ export default function CreateAccount({ navigation }) {
         password,
         fullName: fullName.trim(),
         role,
+        phone: contactNumber.trim(),
+        age: parseInt(age),
+        address: address.trim(),
+        guardianName: parsedAge < 18 ? guardianName.trim() : null,
+        guardianContact: parsedAge < 18 ? guardianContact.trim() : null,
       });
 
       updateProfile({
         name: fullName.trim(),
         email: email.trim(),
+        phone: contactNumber.trim(),
+        address: address.trim(),
+        age: parseInt(age),
+        guardian_name: parsedAge < 18 ? guardianName.trim() : '',
+        guardian_contact: parsedAge < 18 ? guardianContact.trim() : '',
         role,
       });
 
@@ -63,7 +93,13 @@ export default function CreateAccount({ navigation }) {
         'Account Created',
         'If email confirmation is enabled, please verify your email before logging in.',
       );
-      navigation.navigate('VerifyAccount', {email: email.trim(), role});
+      // navigation.navigate('VerifyAccount', {email: email.trim(), role});
+      // Since email verification might be off, let's just go straight to login or home
+      if (role === 'Client') {
+        navigation.navigate('HomepageClient');
+      } else {
+        navigation.navigate('AttyLandingPage');
+      }
     } catch (error) {
       Alert.alert('Sign Up Failed', error?.message ?? 'Unable to create account.');
     } finally {
@@ -81,7 +117,7 @@ export default function CreateAccount({ navigation }) {
         {/* Back Button */}
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => navigation.goBack()}>
+          onPress={() => navigation.canGoBack() ? navigation.goBack() : null}>
           <Text style={styles.backButtonText}>← Back</Text>
         </TouchableOpacity>
 
@@ -89,25 +125,16 @@ export default function CreateAccount({ navigation }) {
         <Text style={styles.title}>Create Profile</Text>
         <Text style={styles.subtitle}>Join the BatasMo legal network.</Text>
 
-        {/* Role Toggle */}
         <View style={styles.toggleContainer}>
           <TouchableOpacity
             style={[styles.toggleOption, isClient && styles.activeToggle]}
-            onPress={() => setIsClient(true)}
-          >
-            <Text style={[styles.toggleText, isClient && styles.activeText]}>
-              CLIENT
-            </Text>
+            onPress={() => setIsClient(true)}>
+            <Text style={[styles.toggleText, isClient && styles.activeText]}>Client</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.toggleOption, !isClient && styles.activeToggle]}
-            onPress={() => setIsClient(false)}
-          >
-            <Text
-              style={[styles.toggleText, !isClient && styles.activeText]}
-            >
-              ATTORNEY
-            </Text>
+            onPress={() => setIsClient(false)}>
+            <Text style={[styles.toggleText, !isClient && styles.activeText]}>Attorney</Text>
           </TouchableOpacity>
         </View>
 
@@ -115,19 +142,83 @@ export default function CreateAccount({ navigation }) {
         <Text style={styles.label}>Full Name</Text>
         <TextInput
           style={styles.input}
-          placeholder="Alexander Hamilton"
+          placeholder="Dr. Sarah Johnson"
+          placeholderTextColor="#94A3B8"
           value={fullName}
           onChangeText={setFullName}
+          maxLength={100}
         />
+
+        {/* Contact Number */}
+        <Text style={styles.label}>Contact Number</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="09171234567"
+          placeholderTextColor="#94A3B8"
+          keyboardType="phone-pad"
+          value={contactNumber}
+          onChangeText={setContactNumber}
+          maxLength={11}
+        />
+
+        {/* Age */}
+        <Text style={styles.label}>Age</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="21"
+          placeholderTextColor="#94A3B8"
+          keyboardType="number-pad"
+          value={age}
+          onChangeText={setAge}
+          maxLength={3}
+        />
+
+        {/* Address */}
+        <Text style={styles.label}>Address</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="123 Legal St. Manila City"
+          placeholderTextColor="#94A3B8"
+          value={address}
+          onChangeText={setAddress}
+          maxLength={255}
+        />
+
+        {/* Guardian details if Minor */}
+        {parseInt(age) > 0 && parseInt(age) < 18 && (
+          <>
+            <Text style={styles.label}>Guardian Full Name</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Guardian's Name"
+              value={guardianName}
+              onChangeText={setGuardianName}
+              maxLength={100}
+            />
+
+            <Text style={styles.label}>Guardian Contact Number</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="09171234567"
+              value={guardianContact}
+              onChangeText={setGuardianContact}
+              keyboardType="phone-pad"
+              maxLength={11}
+            />
+          </>
+        )}
 
         {/* Email */}
         <Text style={styles.label}>Email Address</Text>
         <TextInput
-          style={styles.input}
-          placeholder="name@domain.com"
+          style={[styles.input, {color: '#0F172A'}]}
+          placeholder="sarah.johnson@legal.com"
+          placeholderTextColor="#94A3B8"
+          keyboardType="email-address"
+          autoCapitalize="none"
           value={email}
           onChangeText={setEmail}
-          keyboardType="email-address"
+          maxLength={150}
         />
 
         {/* Password */}
@@ -139,6 +230,7 @@ export default function CreateAccount({ navigation }) {
             value={password}
             onChangeText={setPassword}
             secureTextEntry={!showPassword}
+            maxLength={64}
           />
           <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
             <Text style={styles.passwordToggleText}>
@@ -156,6 +248,7 @@ export default function CreateAccount({ navigation }) {
             value={confirmPassword}
             onChangeText={setConfirmPassword}
             secureTextEntry={!showConfirmPassword}
+            maxLength={64}
           />
           <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
             <Text style={styles.passwordToggleText}>

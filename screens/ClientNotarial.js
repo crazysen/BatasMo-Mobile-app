@@ -2,6 +2,9 @@ import React, {useCallback, useEffect, useState} from 'react';
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
+  Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -9,7 +12,17 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+
+const DOCUMENT_TYPES = [
+  'Affidavit',
+  'Contract',
+  'Power of Attorney',
+  'Deed of Sale',
+  'Acknowledgment',
+  'Oath / Affirmation',
+];
 import {SafeAreaView} from 'react-native-safe-area-context';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import {
@@ -44,7 +57,7 @@ export default function ClientNotarial({navigation}) {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => navigation.goBack()}>
+          onPress={() => navigation.canGoBack() ? navigation.goBack() : null}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
         <View style={styles.headerTitleContainer}>
@@ -107,6 +120,20 @@ const NewRequestForm = ({navigation, onSubmitted}) => {
   const [details, setDetails] = useState('');
   const [documentFile, setDocumentFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showDocTypePicker, setShowDocTypePicker] = useState(false);
+
+  const handleDateChange = (event, selectedDate) => {
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false);
+    }
+    if (selectedDate) {
+      const year = selectedDate.getFullYear();
+      const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+      const day = String(selectedDate.getDate()).padStart(2, '0');
+      setPreferredDate(`${year}-${month}-${day}`);
+    }
+  };
 
   const pickDocument = async () => {
     try {
@@ -179,12 +206,52 @@ const NewRequestForm = ({navigation, onSubmitted}) => {
       <Text style={styles.sectionTitle}>New Request</Text>
 
       <Text style={styles.inputLabel}>Type of Document</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Affidavit / Contract / POA"
-        value={serviceType}
-        onChangeText={setServiceType}
-      />
+      <TouchableOpacity
+        style={styles.dropdownButton}
+        onPress={() => setShowDocTypePicker(true)}>
+        <Text style={serviceType ? styles.dropdownText : styles.dropdownPlaceholder}>
+          {serviceType || 'Select document type'}
+        </Text>
+        <Text style={styles.dropdownArrow}>▼</Text>
+      </TouchableOpacity>
+
+      <Modal
+        visible={showDocTypePicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDocTypePicker(false)}>
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowDocTypePicker(false)}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Select Document Type</Text>
+            <FlatList
+              data={DOCUMENT_TYPES}
+              keyExtractor={(item) => item}
+              renderItem={({item}) => (
+                <TouchableOpacity
+                  style={[
+                    styles.modalOption,
+                    serviceType === item && styles.modalOptionSelected,
+                  ]}
+                  onPress={() => {
+                    setServiceType(item);
+                    setShowDocTypePicker(false);
+                  }}>
+                  <Text
+                    style={[
+                      styles.modalOptionText,
+                      serviceType === item && styles.modalOptionTextSelected,
+                    ]}>
+                    {item}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       <Text style={styles.inputLabel}>Upload Document</Text>
       <TouchableOpacity style={styles.uploadArea} onPress={pickDocument}>
@@ -197,12 +264,25 @@ const NewRequestForm = ({navigation, onSubmitted}) => {
       <View style={styles.row}>
         <View style={styles.halfInputLeft}>
           <Text style={styles.inputLabel}>Preferred Date</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="YYYY-MM-DD"
-            value={preferredDate}
-            onChangeText={setPreferredDate}
-          />
+          <TouchableOpacity onPress={() => setShowDatePicker(true)}>
+            <View pointerEvents="none">
+              <TextInput
+                style={styles.input}
+                placeholder="YYYY-MM-DD"
+                value={preferredDate}
+                editable={false}
+              />
+            </View>
+          </TouchableOpacity>
+          {showDatePicker && (
+            <DateTimePicker
+              value={preferredDate ? new Date(preferredDate) : new Date()}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              onChange={handleDateChange}
+              minimumDate={new Date()}
+            />
+          )}
         </View>
         <View style={styles.halfInputRight}>
           <Text style={styles.inputLabel}>Preferred Time</Text>
@@ -435,4 +515,48 @@ const styles = StyleSheet.create({
     marginTop: 15,
   },
   paymentButtonText: {color: '#FFF', fontWeight: '700'},
+  dropdownButton: {
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 12,
+    backgroundColor: '#F8FAFC',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  dropdownText: {color: '#1E293B', fontSize: 14},
+  dropdownPlaceholder: {color: '#94A3B8', fontSize: 14},
+  dropdownArrow: {color: '#94A3B8', fontSize: 10},
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#FFF',
+    borderRadius: 20,
+    width: '80%',
+    maxHeight: 400,
+    paddingVertical: 20,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
+    textAlign: 'center',
+    marginBottom: 12,
+    paddingHorizontal: 20,
+  },
+  modalOption: {
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  modalOptionSelected: {backgroundColor: '#EFF6FF'},
+  modalOptionText: {fontSize: 15, color: '#334155'},
+  modalOptionTextSelected: {color: '#1E40AF', fontWeight: '700'},
 });

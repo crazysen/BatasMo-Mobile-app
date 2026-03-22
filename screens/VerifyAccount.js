@@ -57,7 +57,7 @@ export default function VerifyAccount({navigation, route}) {
         token,
       });
 
-      navigation.navigate('AccountCreated', {role});
+      navigation.navigate('HomepageClient');
     } catch (error) {
       Alert.alert('Verification Failed', error?.message ?? 'Invalid or expired code.');
     } finally {
@@ -81,7 +81,7 @@ export default function VerifyAccount({navigation, route}) {
     <SafeAreaView style={styles.container}>
       <TouchableOpacity
         style={styles.backButton}
-        onPress={() => navigation.goBack()}>
+        onPress={() => navigation.canGoBack() ? navigation.goBack() : null}>
         <Text style={styles.backButtonText}>← Back</Text>
       </TouchableOpacity>
 

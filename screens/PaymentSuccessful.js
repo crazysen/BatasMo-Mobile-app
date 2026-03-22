@@ -12,7 +12,7 @@ export default function PaymentSuccessful({navigation, route}) {
   const transactionId = route?.params?.transactionId || 'BTMS-UNKNOWN';
   const paymentContext = route?.params?.paymentContext || null;
   const serviceData = route?.params?.serviceData || null;
-  const isConsultationPayment = paymentContext?.sourceType === 'appointment';
+  const isConsultationPayment = paymentContext?.sourceType === 'appointment' || paymentContext?.sourceType === 'appointment_booking';
 
   const handleBackToDashboard = () => {
     if (isConsultationPayment) {

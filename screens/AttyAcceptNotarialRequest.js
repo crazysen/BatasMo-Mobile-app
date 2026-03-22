@@ -80,7 +80,7 @@ const AcceptRequestScreen = ({ navigation, route }) => {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+        <TouchableOpacity onPress={() => navigation.canGoBack() ? navigation.goBack() : null}>
           <ArrowLeft size={24} color="#1e293b" />
         </TouchableOpacity>
         <View style={styles.headerText}>
@@ -154,7 +154,7 @@ const AcceptRequestScreen = ({ navigation, route }) => {
             </>
           )}
         </TouchableOpacity>
-        <TouchableOpacity style={styles.cancelBtn} onPress={() => navigation.goBack()}>
+        <TouchableOpacity style={styles.cancelBtn} onPress={() => navigation.canGoBack() ? navigation.goBack() : null}>
           <Text style={styles.cancelText}>Cancel</Text>
         </TouchableOpacity>
       </View>

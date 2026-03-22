@@ -233,7 +233,7 @@ export default function NotarialServices({ navigation }) {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.topHeader}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+        <TouchableOpacity onPress={() => navigation.canGoBack() ? navigation.goBack() : null}>
           <ArrowLeft size={24} color="#1e293b" />
         </TouchableOpacity>
         <View style={styles.headerTitles}>

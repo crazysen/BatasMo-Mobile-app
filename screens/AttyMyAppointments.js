@@ -86,7 +86,7 @@ export default function AttyMyAppointments({navigation}) {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.navHeader}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+        <TouchableOpacity onPress={() => navigation.canGoBack() ? navigation.goBack() : null}>
           <MaterialCommunityIcons name="chevron-left" size={28} color="#111827" />
         </TouchableOpacity>
         <Text style={styles.navTitle}>My Appointments</Text>

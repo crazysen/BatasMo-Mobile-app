@@ -163,7 +163,7 @@ export default function ClientNotification({navigation}) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+      <TouchableOpacity style={styles.backButton} onPress={() => navigation.canGoBack() ? navigation.goBack() : null}>
         <Text style={styles.backText}>← Back</Text>
       </TouchableOpacity>
 

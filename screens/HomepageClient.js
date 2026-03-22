@@ -22,7 +22,8 @@ const HomepageClient = ({navigation}) => {
       const records = await getMyAppointments();
       setAppointments(Array.isArray(records) ? records : []);
     } catch (error) {
-      Alert.alert('Error', error?.message ?? 'Failed to load appointments.');
+      // Silently handle — no popup. Common when token is stale.
+      console.warn('Appointments fetch failed:', error?.message);
       setAppointments([]);
     } finally {
       setLoadingAppointments(false);
@@ -80,19 +81,23 @@ const HomepageClient = ({navigation}) => {
     }
 
     const rawValue = String(isoDateTime).trim();
-    const normalizedValue = rawValue
-      .replace(' ', 'T')
-      .replace(/\+00$/, 'Z');
+    let dateValue = null;
 
-    let dateValue = new Date(normalizedValue);
-    if (Number.isNaN(dateValue.getTime())) {
-      const localMatch = rawValue.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})(?::\d{2})?/);
-      if (localMatch) {
-        dateValue = new Date(`${localMatch[1]}T${localMatch[2]}:00`);
-      }
+    const localMatch = rawValue.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+    if (localMatch) {
+      dateValue = new Date(
+        localMatch[1],
+        Number(localMatch[2]) - 1,
+        localMatch[3],
+        localMatch[4],
+        localMatch[5]
+      );
+    } else {
+      const normalizedValue = rawValue.replace(' ', 'T').replace(/\+00$/, 'Z');
+      dateValue = new Date(normalizedValue);
     }
 
-    if (Number.isNaN(dateValue.getTime())) {
+    if (!dateValue || Number.isNaN(dateValue.getTime())) {
       return {date: 'No schedule', time: '--:--'};
     }
 
@@ -231,7 +236,7 @@ const HomepageClient = ({navigation}) => {
                 </View>
 
                 <View style={styles.appointmentActions}>
-                  {isConfirmed ? (
+                  {status === 'PENDING' ? (
                     <TouchableOpacity
                       style={styles.paymentButton}
                       onPress={() => handlePayment(item)}>
@@ -249,6 +254,11 @@ const HomepageClient = ({navigation}) => {
                       <Text style={styles.confirmedIcon}>✓</Text>
                       <Text style={styles.confirmedText}>Completed</Text>
                     </TouchableOpacity>
+                  ) : isConfirmed ? (
+                    <View style={styles.confirmedBadge}>
+                      <Text style={styles.confirmedIcon}>✓</Text>
+                      <Text style={styles.confirmedText}>Confirmed</Text>
+                    </View>
                   ) : (
                     <View style={styles.pendingBadgeInline}>
                       <Text style={styles.pendingBadgeInlineText}>Awaiting approval</Text>

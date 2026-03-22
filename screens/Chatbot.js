@@ -22,7 +22,7 @@ const ChatbotScreen = ({ navigation }) => {
 
   const handleBack = () => {
     if (navigation && navigation.goBack) {
-      navigation.goBack();
+      navigation.canGoBack() ? navigation.goBack() : null;
     }
   };
 

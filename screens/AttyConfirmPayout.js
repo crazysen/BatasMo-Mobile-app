@@ -275,7 +275,7 @@ export default function ConfirmPayoutScreen({ navigation }) {
           <Text style={styles.confirmBtnText}>Confirm & Withdraw</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.cancelBtn}>
+        <TouchableOpacity onPress={() => navigation.canGoBack() ? navigation.goBack() : null} style={styles.cancelBtn}>
           <Text style={styles.cancelBtnText}>Cancel Request</Text>
         </TouchableOpacity>
       </View>

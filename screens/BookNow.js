@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useState, useEffect, useCallback} from 'react';
 import {
   Alert,
   StyleSheet,
@@ -7,31 +7,53 @@ import {
   TouchableOpacity,
   ScrollView,
   TextInput,
+  ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import {createAppointment} from '../services/appointmentService';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { getAvailability } from '../services/appointmentService';
 
 export default function BookNow({navigation, route}) {
-  const [selectedTime, setSelectedTime] = useState('12:00 PM');
-  const [selectedDate, setSelectedDate] = useState('2026-02-17');
+  const [selectedTime, setSelectedTime] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [showPicker, setShowPicker] = useState(false);
+  
+  const [availableSlots, setAvailableSlots] = useState([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+
   const [reason, setReason] = useState('');
-  const [submitting, setSubmitting] = useState(false);
   const attorney = route?.params?.attorney || { name: 'Dr. Sarah Johnson', specialty: 'Corporate Law', price: '₱2,500.00' };
 
-  const timeSlots = [
-    '9:00 AM', '10:00 AM', '11:00 AM',
-    '12:00 PM', '1:00 PM', '2:00 PM',
-    '3:00 PM', '4:00 PM', '5:00 PM'
-  ];
+  const formattedDate = selectedDate.toISOString().split('T')[0];
 
-  const handleSubmit = async () => {
+  const fetchAvailableSlots = useCallback(async () => {
+    if (!attorney?.id) return;
+    try {
+      setLoadingSlots(true);
+      setSelectedTime(null);
+      const slots = await getAvailability(attorney.id, formattedDate);
+      // Backend returns slots ordered by time
+      setAvailableSlots(slots.map(s => s.time));
+    } catch (error) {
+      Alert.alert('Error', 'Failed to load available slots.');
+    } finally {
+      setLoadingSlots(false);
+    }
+  }, [attorney?.id, formattedDate]);
+
+  useEffect(() => {
+    fetchAvailableSlots();
+  }, [fetchAvailableSlots]);
+
+  const handleSubmit = () => {
     if (!attorney?.id) {
       Alert.alert('Error', 'Please select an attorney from the list first.');
       return;
     }
 
-    if (!selectedDate.trim()) {
-      Alert.alert('Error', 'Please enter a preferred date (YYYY-MM-DD).');
+    if (!selectedTime) {
+      Alert.alert('Error', 'Please select a time slot.');
       return;
     }
 
@@ -40,66 +62,60 @@ export default function BookNow({navigation, route}) {
       return;
     }
 
-    try {
-      setSubmitting(true);
-      const [time, modifier] = selectedTime.split(' ');
-      const [rawHour, rawMinute] = time.split(':');
-      let hour = Number(rawHour);
-      if (modifier === 'PM' && hour < 12) {
-        hour += 12;
-      }
-      if (modifier === 'AM' && hour === 12) {
-        hour = 0;
-      }
-      const minute = Number(rawMinute);
-      const formattedHour = String(hour).padStart(2, '0');
-      const formattedMinute = String(minute).padStart(2, '0');
-      const scheduleDateTime = `${selectedDate}T${formattedHour}:${formattedMinute}:00`;
+    const [time, modifier] = selectedTime.split(' ');
+    const [rawHour, rawMinute] = time.split(':');
+    let hour = Number(rawHour);
+    if (modifier === 'PM' && hour < 12) hour += 12;
+    if (modifier === 'AM' && hour === 12) hour = 0;
+    
+    const formattedHour = String(hour).padStart(2, '0');
+    const scheduleDateTime = `${formattedDate}T${formattedHour}:${String(rawMinute).padStart(2, '0')}:00`;
 
-      await createAppointment({
-        attorney_id: attorney.id,
-        title: `Consultation - ${attorney.specialty ?? 'General'}`,
-        notes: reason.trim(),
-        scheduled_at: scheduleDateTime,
-        amount: Number(String(attorney.price || '').replace(/[^\d.]/g, '')) || 2500,
-      });
-
-      navigation.navigate('BookingRequestSubmitted', {attorney});
-    } catch (error) {
-      Alert.alert('Error', error?.message ?? 'Unable to submit booking request.');
-    } finally {
-      setSubmitting(false);
-    }
+    // Instead of creating appointment, pass to Payment
+    navigation.navigate('Payment', {
+      paymentMethod: 'gcash',
+      paymentContext: {
+        sourceType: 'appointment_booking',
+        payload: {
+          attorney_id: attorney.id,
+          title: `Consultation - ${attorney.specialty ?? 'General'}`,
+          notes: reason.trim(),
+          scheduled_at: scheduleDateTime,
+          amount: Number(String(attorney.price || '').replace(/[^\d.]/g, '')) || 2500,
+        }
+      },
+      serviceData: { amount: attorney.price || '₱2,500.00' }
+    });
   };
 
   const handleCancel = () => {
-    navigation.goBack();
+    navigation.canGoBack() ? navigation.goBack() : null;
+  };
+
+  const onChangeDate = (event, date) => {
+    if (Platform.OS === 'android') setShowPicker(false);
+    if (date) {
+      setSelectedDate(date);
+    }
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        {/* Header */}
         <TouchableOpacity style={styles.backButton} onPress={handleCancel}>
           <Text style={styles.backIcon}>‹</Text>
         </TouchableOpacity>
         
         <Text style={styles.headerTitle}>Book an Appointment</Text>
-        <Text style={styles.headerSubtitle}>Choose from our experienced attorneys</Text>
+        <Text style={styles.headerSubtitle}>Choose from available slots</Text>
 
-        {/* Form Card */}
         <View style={styles.formCard}>
           <Text style={styles.cardTitle}>Complete Your Booking</Text>
 
-          {/* Attorney Summary Box */}
           <View style={styles.summaryBox}>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Attorney:</Text>
               <Text style={styles.summaryValue}>{attorney.name}</Text>
-            </View>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Specialty:</Text>
-              <Text style={styles.summaryValue}>{attorney.specialty}</Text>
             </View>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Fee:</Text>
@@ -107,41 +123,58 @@ export default function BookNow({navigation, route}) {
             </View>
           </View>
 
-          {/* Select Date */}
           <Text style={styles.inputLabel}>📅 Select Date</Text>
-          <TouchableOpacity style={styles.datePicker}>
-            <TextInput
-              value={selectedDate}
-              onChangeText={setSelectedDate}
-              style={styles.dateTextInput}
-              placeholder="YYYY-MM-DD"
-            />
+          <TouchableOpacity style={styles.datePicker} onPress={() => setShowPicker(true)}>
+            <Text style={styles.dateText}>
+              {selectedDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+            </Text>
             <Text style={styles.calendarIcon}>📅</Text>
           </TouchableOpacity>
 
-          {/* Select Time Slot */}
-          <Text style={styles.inputLabel}>🕒 Select Time Slot</Text>
-          <View style={styles.timeGrid}>
-            {timeSlots.map((time) => (
-              <TouchableOpacity
-                key={time}
-                onPress={() => setSelectedTime(time)}
-                style={[
-                  styles.timeChip,
-                  selectedTime === time && styles.timeChipSelected
-                ]}
-              >
-                <Text style={[
-                  styles.timeChipText,
-                  selectedTime === time && styles.timeChipTextSelected
-                ]}>
-                  {time}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          {(showPicker || Platform.OS === 'ios') && (
+            <DateTimePicker
+              value={selectedDate}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              onChange={onChangeDate}
+              minimumDate={new Date()}
+            />
+          )}
 
-          {/* Reason for Consultation */}
+          {Platform.OS === 'ios' && showPicker && (
+            <TouchableOpacity style={styles.iosConfirm} onPress={() => setShowPicker(false)}>
+              <Text style={styles.iosConfirmText}>Confirm Date</Text>
+            </TouchableOpacity>
+          )}
+
+          <Text style={styles.inputLabel}>🕒 Select Available Slot</Text>
+          
+          {loadingSlots ? (
+            <ActivityIndicator size="small" color="#0F172A" style={{ marginBottom: 20 }} />
+          ) : availableSlots.length === 0 ? (
+            <Text style={styles.noSlotsText}>No availability for this date.</Text>
+          ) : (
+            <View style={styles.timeGrid}>
+              {availableSlots.map((time) => (
+                <TouchableOpacity
+                  key={time}
+                  onPress={() => setSelectedTime(time)}
+                  style={[
+                    styles.timeChip,
+                    selectedTime === time && styles.timeChipSelected
+                  ]}
+                >
+                  <Text style={[
+                    styles.timeChipText,
+                    selectedTime === time && styles.timeChipTextSelected
+                  ]}>
+                    {time}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
           <Text style={styles.inputLabel}>Reason for Consultation</Text>
           <TextInput
             style={styles.textArea}
@@ -153,16 +186,14 @@ export default function BookNow({navigation, route}) {
             onChangeText={setReason}
           />
 
-          {/* Note Box */}
           <View style={styles.noteBox}>
             <Text style={styles.noteText}>
-              <Text style={{ fontWeight: 'bold' }}>Note:</Text> Payment will be required only after the attorney accepts your consultation request. You will receive a notification to proceed with payment.
+              <Text style={{ fontWeight: 'bold' }}>Payment First:</Text> Your consultation slot is only confirmed and blocked off after successful payment.
             </Text>
           </View>
 
-          {/* Action Buttons */}
-          <TouchableOpacity style={styles.submitButton} onPress={handleSubmit} disabled={submitting}>
-            <Text style={styles.submitButtonText}>{submitting ? 'Submitting...' : 'Submit Booking Request'}</Text>
+          <TouchableOpacity style={[styles.submitButton, (!selectedTime || !reason) && styles.submitDisabled]} onPress={handleSubmit} disabled={!selectedTime || !reason}>
+            <Text style={styles.submitButtonText}>Proceed to Payment</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
@@ -210,29 +241,30 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 24,
+    marginBottom: 10,
+    backgroundColor: '#eff6ff',
   },
-  dateText: { fontSize: 14, color: '#475569' },
-  dateTextInput: {
-    flex: 1,
-    fontSize: 14,
-    color: '#475569',
-    paddingVertical: 0,
-  },
+  dateText: { fontSize: 15, color: '#1e3a8a', fontWeight: '500' },
   calendarIcon: { fontSize: 16, color: '#64748B' },
-  timeGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 24 },
+  iosConfirm: { alignSelf: 'flex-end', padding: 10, marginBottom: 10 },
+  iosConfirmText: { color: '#2563eb', fontWeight: 'bold' },
+  
+  noSlotsText: { color: '#EF4444', marginBottom: 20, fontStyle: 'italic', fontSize: 13 },
+  
+  timeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 24 },
   timeChip: {
-    width: '31%',
+    width: '30%',
     paddingVertical: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     borderRadius: 10,
     alignItems: 'center',
-    marginBottom: 10,
+    backgroundColor: '#fafafa',
   },
   timeChipSelected: { backgroundColor: '#0F172A', borderColor: '#0F172A' },
   timeChipText: { color: '#0F172A', fontWeight: '600', fontSize: 12 },
   timeChipTextSelected: { color: 'white' },
+  
   textArea: {
     borderWidth: 1,
     borderColor: '#E2E8F0',
@@ -256,6 +288,7 @@ const styles = StyleSheet.create({
     borderRadius: 12, 
     marginBottom: 12 
   },
+  submitDisabled: { backgroundColor: '#94A3B8' },
   submitButtonText: { color: 'white', textAlign: 'center', fontWeight: 'bold', fontSize: 16 },
   cancelButton: { 
     paddingVertical: 16, 

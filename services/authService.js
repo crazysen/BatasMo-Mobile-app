@@ -1,126 +1,193 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import {
-  apiRequest,
-  clearAuthToken,
-  setAuthToken,
-} from './apiClient';
+import { supabase } from './supabaseClient';
 
-const RECOVERY_EMAIL_KEY = 'recovery_email';
-const RECOVERY_CODE_KEY = 'recovery_code';
-
-export async function signUpWithEmail({email, password, fullName, role}) {
-  const response = await apiRequest('/auth/register', {
-    method: 'POST',
-    body: {
-      full_name: fullName,
-      email,
-      password,
-      role,
+export async function signUpWithEmail({
+  email,
+  password,
+  fullName,
+  role,
+  phone,
+  age,
+  address,
+  guardianName,
+  guardianContact
+}) {
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        full_name: fullName,
+        role: role,
+      },
     },
   });
 
-  return response?.data;
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (data?.session && data.user) {
+    const { error: profileError } = await supabase.from('profiles').upsert({
+      id: data.user.id,
+      email: email,
+      full_name: fullName,
+      role: role.charAt(0).toUpperCase() + role.slice(1).toLowerCase(),
+      phone: phone || null,
+      age: age || null,
+      address: address || null,
+      guardian_name: guardianName || null,
+      guardian_contact: guardianContact || null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+
+    if (profileError) {
+      console.error('Failed to create profile:', profileError);
+    }
+    
+    // Attach profile fields so frontend routing works
+    data.user.role = role;
+    data.user.name = fullName;
+    data.user.phone = phone;
+    data.user.address = address;
+  }
+
+  return { token: data?.session?.access_token, user: data?.user };
 }
 
-export async function signInWithEmail({email, password}) {
-  const response = await apiRequest('/auth/login', {
-    method: 'POST',
-    body: {
-      email,
-      password,
-    },
+export async function checkEmailLockout(email) {
+  try {
+    const { data } = await supabase.rpc('check_login_lockout', { user_email: email });
+    return Number(data) || 0;
+  } catch (error) {
+    return 0; // Fail open slightly if RPC doesn't exist yet
+  }
+}
+
+export async function signInWithEmail({ email, password }) {
+  // 1. PRE-FLIGHT: Check if user is already locked out (3 consecutive fails)
+  const lockoutTime = await checkEmailLockout(email);
+  if (lockoutTime > 0) {
+    throw new Error(`LOCKOUT:${lockoutTime}`);
+  }
+
+  // 2. ATTEMPT LOGIN
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
   });
 
-  const token = response?.data?.token;
-  if (token) {
-    await setAuthToken(token);
+  if (error) {
+    // 3. LOG FAILURE: If the password was wrong, securely log it to the audit_logs table
+    if (error.message.toLowerCase().includes('credential') || error.message.toLowerCase().includes('invalid')) {
+      await supabase.rpc('log_failed_login', { user_email: email });
+    }
+    throw new Error(error.message);
+  }
+
+  // 4. ON SUCCESS: Wipe the failed attempts log for this user
+  await supabase.rpc('clear_failed_logins', { user_email: email });
+
+  if (data?.user) {
+    const meta = data.user.user_metadata || {};
+    
+    // Fetch the canonical role from the profiles table to avoid overwriting it
+    const { data: existingProfile } = await supabase
+      .from('profiles')
+      .select('role, full_name, phone, address')
+      .eq('id', data.user.id)
+      .single();
+
+    const dbRole = existingProfile?.role || meta.role || 'Client';
+    const dbName = existingProfile?.full_name || meta.full_name || email;
+
+    await supabase.from('profiles').upsert({
+      id: data.user.id,
+      email: data.user.email,
+      full_name: dbName,
+      role: dbRole.charAt(0).toUpperCase() + dbRole.slice(1).toLowerCase(),
+    }, { onConflict: 'id' }).select();
+    
+    // Attach profile fields so frontend routing works
+    data.user.role = dbRole;
+    data.user.name = dbName;
+    data.user.phone = existingProfile?.phone;
+    data.user.address = existingProfile?.address;
   }
 
   return {
-    user: response?.data?.user,
+    user: data.user,
+    token: data.session?.access_token,
   };
 }
 
 export async function signOutCurrentUser() {
-  try {
-    await apiRequest('/auth/logout', {
-      method: 'POST',
-      auth: true,
-    });
-  } catch (_) {
-    // Clear local token even if API logout fails.
+  const { error } = await supabase.auth.signOut();
+  if (error) {
+    // throw new Error(error.message);
+  }
+}
+
+export async function verifySignUpOtp({ email, token }) {
+  const { data, error } = await supabase.auth.verifyOtp({
+    email,
+    token,
+    type: 'signup',
+  });
+
+  if (error) {
+    throw new Error(error.message);
   }
 
-  await clearAuthToken();
+  return { success: true };
 }
 
-export async function verifySignUpOtp({email, token}) {
-  await apiRequest('/auth/verify-email', {
-    method: 'POST',
-    body: {
-      email,
-      code: token,
-    },
+export async function resendSignUpOtp({ email }) {
+  const { error } = await supabase.auth.resend({
+    type: 'signup',
+    email,
   });
 
-  return {success: true};
-}
-
-export async function resendSignUpOtp({email}) {
-  await apiRequest('/auth/resend-verification', {
-    method: 'POST',
-    body: {
-      email,
-    },
-  });
-
-  return {success: true};
-}
-
-export async function startPasswordRecovery({email}) {
-  await apiRequest('/auth/forgot-password', {
-    method: 'POST',
-    body: {
-      email,
-    },
-  });
-
-  await AsyncStorage.setItem(RECOVERY_EMAIL_KEY, email);
-  return {success: true};
-}
-
-export async function verifyRecoveryOtp({email, token}) {
-  await apiRequest('/auth/verify-recovery', {
-    method: 'POST',
-    body: {
-      email,
-      code: token,
-    },
-  });
-
-  await AsyncStorage.setItem(RECOVERY_EMAIL_KEY, email);
-  await AsyncStorage.setItem(RECOVERY_CODE_KEY, token);
-
-  return {success: true};
-}
-
-export async function updatePasswordForCurrentUser({newPassword}) {
-  const recoveryEmail = await AsyncStorage.getItem(RECOVERY_EMAIL_KEY);
-  const recoveryCode = await AsyncStorage.getItem(RECOVERY_CODE_KEY);
-
-  if (!recoveryEmail || !recoveryCode) {
-    throw new Error('Recovery session missing. Verify your code again.');
+  if (error) {
+    throw new Error(error.message);
   }
 
-  await apiRequest('/auth/reset-password', {
-    method: 'POST',
-    body: {
-      email: recoveryEmail,
-      code: recoveryCode,
-      password: newPassword,
-    },
+  return { success: true };
+}
+
+export async function startPasswordRecovery({ email }) {
+  const { error } = await supabase.auth.resetPasswordForEmail(email);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return { success: true };
+}
+
+export async function verifyRecoveryOtp({ email, token }) {
+  // Verifying recovery code logs the user in
+  const { data, error } = await supabase.auth.verifyOtp({
+    email,
+    token,
+    type: 'recovery',
   });
 
-  await AsyncStorage.removeItem(RECOVERY_CODE_KEY);
-  return {success: true};
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return { success: true };
+}
+
+export async function updatePasswordForCurrentUser({ newPassword }) {
+  const { error } = await supabase.auth.updateUser({
+    password: newPassword,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return { success: true };
 }

@@ -14,6 +14,7 @@ const AttorneyProfile = ({ navigation, route }) => {
   const attorney = route?.params?.attorney || {
     name: 'Dr. Sarah Johnson',
     specialty: 'Corporate Law Expert',
+    prc_id: 'PRC-12345-67890',
     rating: '4.9',
     reviews: '128',
     image: 'https://i.pravatar.cc/150?u=sarah'
@@ -21,7 +22,7 @@ const AttorneyProfile = ({ navigation, route }) => {
 
   const handleBack = () => {
     if (navigation && navigation.goBack) {
-      navigation.goBack();
+      navigation.canGoBack() ? navigation.goBack() : null;
     }
   };
 
@@ -71,6 +72,7 @@ const AttorneyProfile = ({ navigation, route }) => {
           <View style={styles.nameContainer}>
             <Text style={styles.nameText}>{attorney.name} ✓</Text>
             <Text style={styles.titleText}>{attorney.specialty}</Text>
+            {attorney.prc_id && <Text style={styles.prcText}>PRC License: {attorney.prc_id}</Text>}
             <Text style={styles.ratingText}>★ {attorney.rating} ({attorney.reviews} Reviews)</Text>
           </View>
 
@@ -156,6 +158,7 @@ const styles = StyleSheet.create({
   nameContainer: { alignItems: 'center', marginTop: 15 },
   nameText: { color: 'white', fontSize: 24, fontWeight: 'bold', fontFamily: 'serif' },
   titleText: { color: '#94A3B8', fontSize: 16, marginTop: 4 },
+  prcText: { color: '#CBD5E1', fontSize: 13, marginTop: 4, fontStyle: 'italic' },
   ratingText: { color: '#EAB308', marginTop: 8, fontWeight: 'bold' },
   statsOverlay: {
     flexDirection: 'row',

@@ -85,7 +85,7 @@ export default function ConsultationChat({ navigation, route }) {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+        <TouchableOpacity style={styles.backButton} onPress={() => navigation.canGoBack() ? navigation.goBack() : null}>
           <ArrowLeft size={24} color="#111827" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Consultation</Text>
@@ -108,10 +108,12 @@ export default function ConsultationChat({ navigation, route }) {
         renderItem={({ item }) => <MessageBubble item={item} />}
         contentContainerStyle={styles.chatList}
         ListHeaderComponent={
-          <View style={styles.encryptedBadge}>
-            <ShieldCheck size={14} color="#F59E0B" />
-            <Text style={styles.encryptedText}>END-TO-END ENCRYPTED SECURE CHANNEL</Text>
-          </View>
+          <>
+            <View style={styles.encryptedBadge}>
+              <ShieldCheck size={14} color="#F59E0B" />
+              <Text style={styles.encryptedText}>END-TO-END ENCRYPTED SECURE CHANNEL</Text>
+            </View>
+          </>
         }
       />
 

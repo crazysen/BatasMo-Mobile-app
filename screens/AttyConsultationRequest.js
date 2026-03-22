@@ -111,39 +111,6 @@ export default function AttyConsultationRequest({navigation}) {
         <Text style={styles.metaText}>🕒 {time}</Text>
         <Text style={styles.metaText}>📝 {item.notes || 'No details provided'}</Text>
 
-        {tab === 'pending' ? (
-          <>
-            <View style={styles.actionRow}>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.rejectButton]}
-                onPress={() => handleUpdate(item.id, 'cancelled')}>
-                <Text style={styles.rejectText}>Reject</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.approveButton]}
-                onPress={() => handleUpdate(item.id, 'confirmed')}>
-                <Text style={styles.approveText}>Approve</Text>
-              </TouchableOpacity>
-            </View>
-            <TouchableOpacity
-              style={styles.chatButtonSecondary}
-              onPress={() =>
-                navigation.navigate('AttyConsultationMessage', {
-                  chatId: item.id,
-                  clientName: item.client_name ?? 'Client',
-                  clientInitials: (item.client_name ?? 'Client')
-                    .split(' ')
-                    .filter(Boolean)
-                    .map(part => part[0])
-                    .join('')
-                    .slice(0, 2)
-                    .toUpperCase(),
-                })
-              }>
-              <Text style={styles.chatButtonSecondaryText}>Open Chat</Text>
-            </TouchableOpacity>
-          </>
-        ) : (
           <TouchableOpacity
             style={styles.chatButton}
             onPress={() =>
@@ -161,7 +128,6 @@ export default function AttyConsultationRequest({navigation}) {
             }>
             <Text style={styles.chatButtonText}>Open Chat</Text>
           </TouchableOpacity>
-        )}
       </View>
     );
   };
@@ -169,7 +135,7 @@ export default function AttyConsultationRequest({navigation}) {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+        <TouchableOpacity onPress={() => navigation.canGoBack() ? navigation.goBack() : null}>
           <Text style={styles.backText}>‹</Text>
         </TouchableOpacity>
         <Text style={styles.title}>Consultation Requests</Text>
