@@ -70,6 +70,14 @@ export async function createAppointment(payload) {
     throw new Error(error.message);
   }
 
+  if (payload.slot_date && payload.slot_time) {
+    await supabase.rpc('mark_slot_booked', {
+      p_attorney_id: payload.attorney_id,
+      p_date: payload.slot_date,
+      p_time: payload.slot_time
+    });
+  }
+
   // Update additional fields that the RPC doesn't handle, if any
   if (payload.notes || payload.duration_minutes || payload.amount) {
     const { data: latestAppt } = await supabase
@@ -196,4 +204,50 @@ export async function setAvailability(date, slots) {
   }
 
   return await getAvailability(user.id, date);
+}
+
+export async function setWeeklyAvailability(startDate, endDate, slots) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  // Delete all unbooked slots for this week first
+  await supabase
+    .from('availability_slots')
+    .delete()
+    .eq('attorney_id', user.id)
+    .gte('date', startDate)
+    .lte('date', endDate)
+    .eq('is_booked', false);
+
+  if (!slots || slots.length === 0) return true;
+
+  // Verify which ones are already booked to avoid overwriting them
+  const { data: booked } = await supabase
+    .from('availability_slots')
+    .select('date, time')
+    .eq('attorney_id', user.id)
+    .gte('date', startDate)
+    .lte('date', endDate)
+    .eq('is_booked', true);
+
+  const bookedKeys = (booked || []).map(b => `${b.date}|${b.time}`);
+  
+  // Insert slots that are not already booked
+  const toInsert = slots
+    .filter(slot => !bookedKeys.includes(`${slot.date}|${slot.time}`))
+    .map(slot => ({
+      attorney_id: user.id,
+      date: slot.date,
+      time: slot.time,
+      is_booked: false,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }));
+
+  if (toInsert.length > 0) {
+    const { error } = await supabase.from('availability_slots').insert(toInsert);
+    if (error) throw new Error(error.message);
+  }
+
+  return true;
 }

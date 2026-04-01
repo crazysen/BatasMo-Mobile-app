@@ -93,7 +93,7 @@ export default function ClientNotification({navigation}) {
             : rescheduled
               ? `${item.title ?? 'Consultation'} has a new schedule. Please review your updated appointment time.`
             : `${item.title ?? 'Consultation'} is currently ${status}.`,
-        action: approved ? 'PAY NOW' : rescheduled || completed ? 'OPEN CHAT' : null,
+        action: approved || rescheduled || completed ? 'OPEN CHAT' : null,
         amount: item.amount,
         chatName: item.attorney_name ?? 'Attorney',
       };
@@ -112,18 +112,18 @@ export default function ClientNotification({navigation}) {
         icon: accepted ? '📄' : completed ? '✅' : '⏳',
         iconBg: accepted ? '#DBEAFE' : completed ? '#DCFCE7' : '#E2E8F0',
         title: accepted
-          ? 'Notarial Request Accepted'
+          ? 'Notarial Request Paid'
           : completed
             ? 'Notarial Request Completed'
-            : 'Notarial Request Update',
+            : 'Notarial Request Pending',
         time: getRelativeTime(eventAt),
         timestamp: getSortTimestamp(eventAt),
         description: accepted
-          ? `${item.service_type} request has been accepted by ${item.attorney_name ?? 'your attorney'}.`
+          ? `Your ${item.service_type} payment was successful and is being processed.`
           : completed
             ? `${item.service_type} notarization is completed.`
-            : `${item.service_type} request is currently ${status}.`,
-        action: accepted ? 'PAY NOW' : null,
+            : `You have an unpaid ${item.service_type} request.`,
+        action: status === 'pending' ? 'PAY NOW' : null,
         amount: 4000,
       };
     });

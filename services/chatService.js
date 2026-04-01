@@ -70,11 +70,15 @@ export async function getThreadMessages(threadId) {
   try {
     const rows = await getAppointmentMessages(threadId);
     if (Array.isArray(rows)) {
-      return rows.map(mapApiMessage);
+      return {
+        messages: rows.map(mapApiMessage),
+        isClosed: rows.length > 0 ? rows[0].is_closed : false,
+      };
     }
-    return [];
+    return { messages: [], isClosed: false };
   } catch (_) {
-    return getLocalThreadMessages(threadId);
+    const local = await getLocalThreadMessages(threadId);
+    return { messages: local, isClosed: false };
   }
 }
 
@@ -88,7 +92,8 @@ export async function appendThreadMessage(threadId, payload) {
     await sendAppointmentMessage(threadId, text);
     return getThreadMessages(threadId);
   } catch (_) {
-    return appendLocalThreadMessage(threadId, payload);
+    await appendLocalThreadMessage(threadId, payload);
+    return getThreadMessages(threadId);
   }
 }
 
@@ -98,7 +103,7 @@ export async function ensureThreadSeed(threadId, seedMessages) {
   } catch (_) {
     const existing = await getLocalThreadMessages(threadId);
     if (existing.length > 0) {
-      return existing;
+      return { messages: existing, isClosed: false };
     }
 
     const normalizedSeed = (Array.isArray(seedMessages) ? seedMessages : []).map((item, index) => ({
@@ -111,6 +116,6 @@ export async function ensureThreadSeed(threadId, seedMessages) {
 
     const key = buildThreadKey(threadId);
     await AsyncStorage.setItem(key, JSON.stringify(normalizedSeed));
-    return normalizedSeed;
+    return { messages: normalizedSeed, isClosed: false };
   }
 }

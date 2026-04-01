@@ -25,22 +25,42 @@ export default function BookNow({navigation, route}) {
   const [reason, setReason] = useState('');
   const attorney = route?.params?.attorney || { name: 'Dr. Sarah Johnson', specialty: 'Corporate Law', price: '₱2,500.00' };
 
-  const formattedDate = selectedDate.toISOString().split('T')[0];
+  const localDateStr = new Date(selectedDate.getTime() - selectedDate.getTimezoneOffset() * 60000).toISOString().split('T')[0];
 
   const fetchAvailableSlots = useCallback(async () => {
     if (!attorney?.id) return;
     try {
       setLoadingSlots(true);
       setSelectedTime(null);
-      const slots = await getAvailability(attorney.id, formattedDate);
-      // Backend returns slots ordered by time
-      setAvailableSlots(slots.map(s => s.time));
+      const slots = await getAvailability(attorney.id, localDateStr);
+      
+      const now = new Date();
+      
+      const availableTimeStrings = slots.map(s => s.time).filter(timeStr => {
+        const [time, modifier] = String(timeStr).split(' ');
+        const [rawHour, rawMinute] = time.split(':');
+        let hour = Number(rawHour);
+        if (modifier === 'PM' && hour < 12) hour += 12;
+        if (modifier === 'AM' && hour === 12) hour = 0;
+        
+        const slotDate = new Date(
+          selectedDate.getFullYear(),
+          selectedDate.getMonth(),
+          selectedDate.getDate(),
+          hour,
+          Number(rawMinute),
+          0
+        );
+        return slotDate > now;
+      });
+
+      setAvailableSlots(availableTimeStrings);
     } catch (error) {
       Alert.alert('Error', 'Failed to load available slots.');
     } finally {
       setLoadingSlots(false);
     }
-  }, [attorney?.id, formattedDate]);
+  }, [attorney?.id, localDateStr]);
 
   useEffect(() => {
     fetchAvailableSlots();
@@ -68,8 +88,16 @@ export default function BookNow({navigation, route}) {
     if (modifier === 'PM' && hour < 12) hour += 12;
     if (modifier === 'AM' && hour === 12) hour = 0;
     
-    const formattedHour = String(hour).padStart(2, '0');
-    const scheduleDateTime = `${formattedDate}T${formattedHour}:${String(rawMinute).padStart(2, '0')}:00`;
+    // Create a local Date object instead of a UTC string to prevent timezone shifting
+    const localAppointmentDate = new Date(
+      selectedDate.getFullYear(),
+      selectedDate.getMonth(),
+      selectedDate.getDate(),
+      hour,
+      Number(rawMinute),
+      0
+    );
+    const scheduleDateTime = localAppointmentDate.toISOString();
 
     // Instead of creating appointment, pass to Payment
     navigation.navigate('Payment', {
@@ -81,6 +109,8 @@ export default function BookNow({navigation, route}) {
           title: `Consultation - ${attorney.specialty ?? 'General'}`,
           notes: reason.trim(),
           scheduled_at: scheduleDateTime,
+          slot_time: selectedTime,
+          slot_date: localDateStr,
           amount: Number(String(attorney.price || '').replace(/[^\d.]/g, '')) || 2500,
         }
       },

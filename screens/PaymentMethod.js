@@ -15,8 +15,6 @@ export default function PaymentMethod({navigation, route}) {
 
   const paymentMethods = [
     { id: 'gcash', name: 'GCash', icon: '📱', description: 'Mobile wallet payment' },
-    { id: 'paypal', name: 'PayPal', icon: '🏦', description: 'PayPal account' },
-    { id: 'banktransfer', name: 'Bank Transfer', icon: '🏧', description: 'Direct bank transfer' },
   ];
 
   const handleContinue = () => {

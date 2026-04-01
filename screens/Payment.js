@@ -55,7 +55,7 @@ export default function Payment({navigation, route}) {
     }
 
     if (paymentContext.sourceType === 'notarial') {
-      await updateNotarialRequestStatus(paymentContext.sourceId, 'completed');
+      await updateNotarialRequestStatus(paymentContext.sourceId, 'accepted');
     }
   };
 

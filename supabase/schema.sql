@@ -46,6 +46,9 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   role user_role NOT NULL DEFAULT 'Client',
   phone text,
   address text,
+  age int,
+  guardian_name text,
+  guardian_contact text,
   avatar_url text,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
@@ -98,6 +101,7 @@ CREATE TABLE IF NOT EXISTS public.attorney_profiles (
   bio text,
   consultation_fee numeric(12,2) DEFAULT 0,
   is_verified boolean NOT NULL DEFAULT false,
+  prc_id text,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
@@ -108,19 +112,19 @@ FOR EACH ROW
 EXECUTE FUNCTION public.set_updated_at();
 
 -- Attorney availability slots
+-- NOTE: Uses date + time columns to match actual Supabase table and app code
 CREATE TABLE IF NOT EXISTS public.availability_slots (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   attorney_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  start_time timestamptz NOT NULL,
-  end_time timestamptz NOT NULL,
+  date date NOT NULL,
+  time varchar NOT NULL,
   is_booked boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT availability_time_check CHECK (end_time > start_time)
+  updated_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS idx_availability_attorney_time
-  ON public.availability_slots(attorney_id, start_time);
+CREATE INDEX IF NOT EXISTS idx_availability_attorney_date
+  ON public.availability_slots(attorney_id, date);
 
 CREATE TRIGGER trg_availability_slots_updated_at
 BEFORE UPDATE ON public.availability_slots
@@ -139,6 +143,7 @@ CREATE TABLE IF NOT EXISTS public.appointments (
   duration_minutes int NOT NULL DEFAULT 60,
   status appointment_status NOT NULL DEFAULT 'pending',
   amount numeric(12,2) NOT NULL DEFAULT 0,
+  meeting_link text,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT appointment_duration_check CHECK (duration_minutes > 0)
@@ -166,6 +171,29 @@ CREATE TRIGGER trg_consultation_rooms_updated_at
 BEFORE UPDATE ON public.consultation_rooms
 FOR EACH ROW
 EXECUTE FUNCTION public.set_updated_at();
+
+-- Auto-create consultation room when appointment is confirmed
+CREATE OR REPLACE FUNCTION public.handle_new_consultation_room() 
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  -- Create room if status is 'confirmed' AND it doesn't already exist
+  IF (NEW.status = 'confirmed') THEN
+    INSERT INTO public.consultation_rooms (appointment_id)
+    VALUES (NEW.id)
+    ON CONFLICT (appointment_id) DO NOTHING;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_create_room_on_confirmation ON public.appointments;
+CREATE TRIGGER trg_create_room_on_confirmation
+AFTER UPDATE OR INSERT ON public.appointments
+FOR EACH ROW
+EXECUTE FUNCTION public.handle_new_consultation_room();
 
 CREATE TABLE IF NOT EXISTS public.messages (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -266,7 +294,19 @@ BEFORE UPDATE ON public.notifications
 FOR EACH ROW
 EXECUTE FUNCTION public.set_updated_at();
 
+-- Audit logs for failed login tracking (standalone, no FK needed)
+CREATE TABLE IF NOT EXISTS public.audit_logs (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  email text NOT NULL,
+  attempt_time timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_logs_email_time
+  ON public.audit_logs(email, attempt_time DESC);
+
+-- ============================================================
 -- Enable Row Level Security
+-- ============================================================
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.attorney_profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.availability_slots ENABLE ROW LEVEL SECURITY;
@@ -277,6 +317,11 @@ ALTER TABLE public.notarial_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.payout_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
+
+-- ============================================================
+-- Row Level Security Policies
+-- ============================================================
 
 -- Profiles policies
 DROP POLICY IF EXISTS "profiles_select_own" ON public.profiles;
@@ -342,30 +387,20 @@ CREATE POLICY "rooms_participant_select"
 ON public.consultation_rooms FOR SELECT
 USING (
   EXISTS (
-    SELECT 1
-    FROM public.appointments a
+    SELECT 1 FROM public.appointments a
     WHERE a.id = consultation_rooms.appointment_id
       AND (a.client_id = auth.uid() OR a.attorney_id = auth.uid())
   )
 );
 
-DROP POLICY IF EXISTS "rooms_participant_write" ON public.consultation_rooms;
-CREATE POLICY "rooms_participant_write"
-ON public.consultation_rooms FOR ALL
+DROP POLICY IF EXISTS "rooms_management_update" ON public.consultation_rooms;
+CREATE POLICY "rooms_management_update"
+ON public.consultation_rooms FOR UPDATE
 USING (
   EXISTS (
-    SELECT 1
-    FROM public.appointments a
+    SELECT 1 FROM public.appointments a
     WHERE a.id = consultation_rooms.appointment_id
-      AND (a.client_id = auth.uid() OR a.attorney_id = auth.uid())
-  )
-)
-WITH CHECK (
-  EXISTS (
-    SELECT 1
-    FROM public.appointments a
-    WHERE a.id = consultation_rooms.appointment_id
-      AND (a.client_id = auth.uid() OR a.attorney_id = auth.uid())
+      AND a.attorney_id = auth.uid()
   )
 );
 
@@ -383,16 +418,16 @@ USING (
   )
 );
 
-DROP POLICY IF EXISTS "messages_sender_insert" ON public.messages;
-CREATE POLICY "messages_sender_insert"
+DROP POLICY IF EXISTS "messages_participant_insert" ON public.messages;
+CREATE POLICY "messages_participant_insert"
 ON public.messages FOR INSERT
 WITH CHECK (
-  sender_id = auth.uid()
+  auth.uid() = sender_id 
   AND EXISTS (
-    SELECT 1
-    FROM public.consultation_rooms r
+    SELECT 1 FROM public.consultation_rooms r
     JOIN public.appointments a ON a.id = r.appointment_id
     WHERE r.id = messages.room_id
+      AND r.is_closed = false
       AND (a.client_id = auth.uid() OR a.attorney_id = auth.uid())
   )
 );
@@ -459,3 +494,27 @@ CREATE POLICY "notifications_owner_update"
 ON public.notifications FOR UPDATE
 USING (auth.uid() = user_id)
 WITH CHECK (auth.uid() = user_id);
+
+-- Audit log policies (allow any authenticated user to insert, only service role reads)
+DROP POLICY IF EXISTS "audit_logs_insert_auth" ON public.audit_logs;
+CREATE POLICY "audit_logs_insert_auth"
+ON public.audit_logs FOR INSERT
+WITH CHECK (true);
+
+DROP POLICY IF EXISTS "audit_logs_select_none" ON public.audit_logs;
+CREATE POLICY "audit_logs_select_none"
+ON public.audit_logs FOR SELECT
+USING (false);
+
+-- Function to mark an availability slot as booked regardless of RLS
+CREATE OR REPLACE FUNCTION public.mark_slot_booked(p_attorney_id uuid, p_date date, p_time varchar)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  UPDATE public.availability_slots
+  SET is_booked = true
+  WHERE attorney_id = p_attorney_id AND date = p_date AND time = p_time;
+END;
+$$;

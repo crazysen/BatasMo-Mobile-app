@@ -84,8 +84,6 @@ export default function BookingSummary({navigation, route}) {
           <Text style={styles.selectionTitle}>Select Payment Method</Text>
           
           <PaymentOption id="gcash" label="GCash" icon="📱" color="#3B82F6" />
-          <PaymentOption id="card" label="Credit/Debit Card" icon="💳" color="#A855F7" />
-          <PaymentOption id="banktransfer" label="Bank Transfer" icon="🏦" color="#10B981" />
 
           <TouchableOpacity style={styles.proceedButton} onPress={handleProceedToPayment}>
             <Text style={styles.proceedButtonText}>Proceed to Payment</Text>

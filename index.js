@@ -34,6 +34,8 @@ import PaymentTranscript from './screens/PaymentTranscript.js';
 import BookNow from './screens/BookNow.js';
 import NotarialRequestSubmitted from './screens/NotarialRequestSubmitted.js';
 import PaymentMethod from './screens/PaymentMethod.js';
+import UploadIDScreen from './screens/UploadIDScreen.js';
+import FaceRecognitionScreen from './screens/FaceRecognitionScreen.js';
 import {UserProfileProvider} from './context/UserProfileContext';
 import AttyConsultationRequest from './screens/AttyConsultationRequest';
 import AttyConsultationMessage from './screens/AttyConsultationMessage';
@@ -101,6 +103,8 @@ function App() {
           <Stack.Screen name="BookNow" component={BookNow} />
           <Stack.Screen name="NotarialRequestSubmitted" component={NotarialRequestSubmitted} />
           <Stack.Screen name="PaymentMethod" component={PaymentMethod} />
+          <Stack.Screen name="UploadIDScreen" component={UploadIDScreen} />
+          <Stack.Screen name="FaceRecognitionScreen" component={FaceRecognitionScreen} />
           {/* Attorney Additional Screens */}
           <Stack.Screen name="AttyAvailabilityManager" component={AttyAvailabilityManager} />
           <Stack.Screen name="AttyConsultationRequest" component={AttyConsultationRequest} />

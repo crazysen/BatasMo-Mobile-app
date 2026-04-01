@@ -13,14 +13,6 @@ import {
   View,
 } from 'react-native';
 
-const DOCUMENT_TYPES = [
-  'Affidavit',
-  'Contract',
-  'Power of Attorney',
-  'Deed of Sale',
-  'Acknowledgment',
-  'Oath / Affirmation',
-];
 import {SafeAreaView} from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -114,14 +106,12 @@ export default function ClientNotarial({navigation}) {
 }
 
 const NewRequestForm = ({navigation, onSubmitted}) => {
-  const [serviceType, setServiceType] = useState('');
+  const [serviceType, setServiceType] = useState('Affidavit of Loss');
   const [preferredDate, setPreferredDate] = useState('');
-  const [preferredTime, setPreferredTime] = useState('');
   const [details, setDetails] = useState('');
   const [documentFile, setDocumentFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showDocTypePicker, setShowDocTypePicker] = useState(false);
 
   const handleDateChange = (event, selectedDate) => {
     if (Platform.OS === 'android') {
@@ -177,27 +167,19 @@ const NewRequestForm = ({navigation, onSubmitted}) => {
         });
       }
 
-      await createNotarialRequest({
+      const notarialData = {
         service_type: serviceType.trim(),
         preferred_date: preferredDate || null,
-        details: [preferredTime ? `Preferred Time: ${preferredTime}` : null, details.trim() || null]
-          .filter(Boolean)
-          .join('\n'),
+        details: details.trim() || null,
         document_name: documentFile?.name || null,
         document_base64: documentBase64,
-      });
+      };
 
-      setServiceType('');
-      setPreferredDate('');
-      setPreferredTime('');
-      setDetails('');
-      setDocumentFile(null);
-      await onSubmitted?.();
-      navigation.navigate('NotarialRequestSubmitted');
-    } catch (error) {
-      Alert.alert('Error', error?.message ?? 'Unable to submit notarial request.');
-    } finally {
       setSubmitting(false);
+      navigation.navigate('UploadIDScreen', { notarialData });
+    } catch (error) {
+      setSubmitting(false);
+      Alert.alert('Error', error?.message ?? 'Unable to process request.');
     }
   };
 
@@ -206,52 +188,11 @@ const NewRequestForm = ({navigation, onSubmitted}) => {
       <Text style={styles.sectionTitle}>New Request</Text>
 
       <Text style={styles.inputLabel}>Type of Document</Text>
-      <TouchableOpacity
-        style={styles.dropdownButton}
-        onPress={() => setShowDocTypePicker(true)}>
-        <Text style={serviceType ? styles.dropdownText : styles.dropdownPlaceholder}>
-          {serviceType || 'Select document type'}
+      <View style={styles.dropdownButton}>
+        <Text style={[styles.dropdownText, { fontWeight: '600' }]}>
+          Affidavit of Loss
         </Text>
-        <Text style={styles.dropdownArrow}>▼</Text>
-      </TouchableOpacity>
-
-      <Modal
-        visible={showDocTypePicker}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowDocTypePicker(false)}>
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowDocTypePicker(false)}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Select Document Type</Text>
-            <FlatList
-              data={DOCUMENT_TYPES}
-              keyExtractor={(item) => item}
-              renderItem={({item}) => (
-                <TouchableOpacity
-                  style={[
-                    styles.modalOption,
-                    serviceType === item && styles.modalOptionSelected,
-                  ]}
-                  onPress={() => {
-                    setServiceType(item);
-                    setShowDocTypePicker(false);
-                  }}>
-                  <Text
-                    style={[
-                      styles.modalOptionText,
-                      serviceType === item && styles.modalOptionTextSelected,
-                    ]}>
-                    {item}
-                  </Text>
-                </TouchableOpacity>
-              )}
-            />
-          </View>
-        </TouchableOpacity>
-      </Modal>
+      </View>
 
       <Text style={styles.inputLabel}>Upload Document</Text>
       <TouchableOpacity style={styles.uploadArea} onPress={pickDocument}>
@@ -283,15 +224,6 @@ const NewRequestForm = ({navigation, onSubmitted}) => {
               minimumDate={new Date()}
             />
           )}
-        </View>
-        <View style={styles.halfInputRight}>
-          <Text style={styles.inputLabel}>Preferred Time</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="10:00 AM"
-            value={preferredTime}
-            onChangeText={setPreferredTime}
-          />
         </View>
       </View>
 
@@ -382,7 +314,7 @@ const RequestStatusList = ({navigation, requests, loadingStatus}) => {
             <Text style={styles.subInfoText}>Submitted on {submittedDate}</Text>
             <Text style={styles.scheduleText}>Preferred date: {preferredDate}</Text>
 
-            {status === 'ACCEPTED' && (
+            {status === 'PENDING' && (
               <TouchableOpacity
                 style={styles.paymentButton}
                 onPress={() =>

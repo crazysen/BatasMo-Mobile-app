@@ -6,6 +6,7 @@ import {appendThreadMessage, ensureThreadSeed, getThreadMessages} from '../servi
 const ConsultationChat = ({navigation, route}) => {
   const [messageText, setMessageText] = useState('');
   const [messages, setMessages] = useState([]);
+  const [isClosed, setIsClosed] = useState(false);
 
   const chatName = route?.params?.chatName || 'Attorney';
   const initials = route?.params?.initials || 'AT';
@@ -13,7 +14,6 @@ const ConsultationChat = ({navigation, route}) => {
     () => String(route?.params?.chatId || route?.params?.chatName || 'general-chat'),
     [route?.params?.chatId, route?.params?.chatName],
   );
-
   const loadThread = useCallback(async () => {
     const seed = [
       {
@@ -23,10 +23,16 @@ const ConsultationChat = ({navigation, route}) => {
         time: new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}),
       },
     ];
-    await ensureThreadSeed(threadId, seed);
-    const rows = await getThreadMessages(threadId);
+    const { messages: rows, isClosed: closed } = await ensureThreadSeed(threadId, seed);
     setMessages(rows);
+    setIsClosed(closed);
   }, [chatName, threadId]);
+
+  const refreshMessages = useCallback(async () => {
+    const { messages: rows, isClosed: closed } = await getThreadMessages(threadId);
+    setMessages(rows);
+    setIsClosed(closed);
+  }, [threadId]);
 
   useEffect(() => {
     loadThread();
@@ -34,19 +40,20 @@ const ConsultationChat = ({navigation, route}) => {
 
   useEffect(() => {
     const intervalId = setInterval(() => {
-      loadThread();
-    }, 1500);
+      refreshMessages();
+    }, 2000);
 
     return () => clearInterval(intervalId);
   }, [loadThread]);
 
   const handleSendMessage = async () => {
-    if (!messageText.trim()) return;
-    const next = await appendThreadMessage(threadId, {
+    if (!messageText.trim() || isClosed) return;
+    const { messages: next, isClosed: closed } = await appendThreadMessage(threadId, {
       text: messageText,
       sender: 'me',
     });
     setMessages(next);
+    setIsClosed(closed);
     setMessageText('');
   };
 
@@ -77,6 +84,12 @@ const ConsultationChat = ({navigation, route}) => {
           <Text style={styles.encryptionText}>🔒 This session is end-to-end encrypted for your privacy.</Text>
         </View>
 
+        {isClosed && (
+          <View style={styles.closedBadge}>
+            <Text style={styles.closedText}>⚠️ This consultation has ended. You can no longer send messages.</Text>
+          </View>
+        )}
+
         {messages.map(item => {
           const isMe = item.sender === 'me';
           return (
@@ -96,13 +109,19 @@ const ConsultationChat = ({navigation, route}) => {
         </ScrollView>
         <View style={styles.inputRow}>
           <TextInput
-            style={styles.input}
-            placeholder={`Message ${chatName}...`}
+            style={[styles.input, isClosed && styles.inputDisabled]}
+            placeholder={isClosed ? "Consultation closed" : `Message ${chatName}...`}
             value={messageText}
             onChangeText={setMessageText}
             placeholderTextColor="#94A3B8"
+            editable={!isClosed}
           />
-          <TouchableOpacity style={styles.sendButton} onPress={handleSendMessage} activeOpacity={0.8}>
+          <TouchableOpacity 
+            style={[styles.sendButton, (isClosed || !messageText.trim()) && styles.sendButtonDisabled]} 
+            onPress={handleSendMessage} 
+            activeOpacity={0.8}
+            disabled={isClosed || !messageText.trim()}
+          >
             <Text style={styles.sendIcon}>➤</Text>
           </TouchableOpacity>
         </View>
@@ -147,8 +166,12 @@ const styles = StyleSheet.create({
   actionLabel: {fontSize: 12, color: '#475569'},
   inputRow: {flexDirection: 'row', alignItems: 'center'},
   input: {flex: 1, backgroundColor: '#F1F5F9', height: 48, borderRadius: 24, paddingHorizontal: 20, color: '#0F172A'},
+  inputDisabled: {backgroundColor: '#E2E8F0', color: '#94A3B8'},
   sendButton: {backgroundColor: '#D9B041', width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center', marginLeft: 12},
+  sendButtonDisabled: {backgroundColor: '#CBD5E1'},
   sendIcon: {color: 'white'},
+  closedBadge: {backgroundColor: '#FFF7ED', padding: 12, borderRadius: 8, marginBottom: 20, borderWidth: 1, borderColor: '#FED7AA'},
+  closedText: {color: '#C2410C', fontSize: 12, textAlign: 'center', fontWeight: 'bold'},
 });
 
 export default ConsultationChat;
