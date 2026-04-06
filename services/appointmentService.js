@@ -58,12 +58,21 @@ export async function createAppointment(payload) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
 
-  // Call the Supabase RPC function you created
-  const { error } = await supabase.rpc('book_appointment', {
+  const scheduledAtIso = payload?.scheduled_at
+    ? new Date(payload.scheduled_at).toISOString()
+    : null;
+
+  // Call the RPC with the full signature to avoid overload ambiguity
+  const { data: appointmentId, error } = await supabase.rpc('book_appointment', {
     client_uuid: user.id,
     attorney_uuid: payload.attorney_id,
-    scheduled_time: payload.scheduled_at,
+    scheduled_time: scheduledAtIso,
     title_text: payload.title,
+    notes_text: payload.notes || null,
+    slot_date: payload.slot_date || null,
+    slot_time: payload.slot_time || null,
+    amount_value: payload.amount || 0,
+    duration_minutes_value: payload.duration_minutes || 60,
   });
 
   if (error) {
@@ -78,24 +87,21 @@ export async function createAppointment(payload) {
     });
   }
 
-  // Update additional fields that the RPC doesn't handle, if any
-  if (payload.notes || payload.duration_minutes || payload.amount) {
-    const { data: latestAppt } = await supabase
+  // Payment-first flow: mark newly created booking as confirmed immediately.
+  if (appointmentId) {
+    const { error: updateError } = await supabase
       .from('appointments')
-      .select('id')
-      .eq('client_id', user.id)
-      .eq('attorney_id', payload.attorney_id)
-      .eq('scheduled_at', payload.scheduled_at)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
-
-    if (latestAppt) {
-      await supabase.from('appointments').update({
+      .update({
         notes: payload.notes || null,
         duration_minutes: payload.duration_minutes || 60,
-        amount: payload.amount || null
-      }).eq('id', latestAppt.id);
+        amount: payload.amount || 0,
+        status: 'confirmed',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', appointmentId);
+
+    if (updateError) {
+      throw new Error(updateError.message);
     }
   }
 

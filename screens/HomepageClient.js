@@ -83,18 +83,23 @@ const HomepageClient = ({navigation}) => {
     const rawValue = String(isoDateTime).trim();
     let dateValue = null;
 
-    const localMatch = rawValue.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
-    if (localMatch) {
-      dateValue = new Date(
-        localMatch[1],
-        Number(localMatch[2]) - 1,
-        localMatch[3],
-        localMatch[4],
-        localMatch[5]
-      );
+    // If backend value already has timezone info, parse it directly.
+    const hasTimezoneInfo = /([zZ]|[+-]\d{2}:?\d{2})$/.test(rawValue);
+    if (hasTimezoneInfo) {
+      const normalizedTz = rawValue.replace(' ', 'T').replace(/\+00$/, 'Z');
+      dateValue = new Date(normalizedTz);
     } else {
-      const normalizedValue = rawValue.replace(' ', 'T').replace(/\+00$/, 'Z');
-      dateValue = new Date(normalizedValue);
+      // Fallback for legacy naive timestamps without timezone.
+      const localMatch = rawValue.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+      if (localMatch) {
+        dateValue = new Date(
+          Number(localMatch[1]),
+          Number(localMatch[2]) - 1,
+          Number(localMatch[3]),
+          Number(localMatch[4]),
+          Number(localMatch[5])
+        );
+      }
     }
 
     if (!dateValue || Number.isNaN(dateValue.getTime())) {

@@ -63,11 +63,25 @@ const AttorneyDashboard = ({navigation}) => {
     const scheduleValue = resolveScheduleValue(item);
     let dateValue = null;
     if (scheduleValue) {
-      const match = String(scheduleValue).trim().match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
-      if (match) {
-        dateValue = new Date(match[1], Number(match[2]) - 1, match[3], match[4], match[5]);
+      const raw = String(scheduleValue).trim();
+      const hasTimezoneInfo = /([zZ]|[+-]\d{2}:?\d{2})$/.test(raw);
+
+      if (hasTimezoneInfo) {
+        const normalized = raw.replace(' ', 'T').replace(/\+00$/, 'Z');
+        dateValue = new Date(normalized);
       } else {
-        dateValue = new Date(String(scheduleValue).replace(' ', 'T'));
+        const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+        if (match) {
+          dateValue = new Date(
+            Number(match[1]),
+            Number(match[2]) - 1,
+            Number(match[3]),
+            Number(match[4]),
+            Number(match[5]),
+          );
+        } else {
+          dateValue = new Date(raw.replace(' ', 'T'));
+        }
       }
     }
     return {

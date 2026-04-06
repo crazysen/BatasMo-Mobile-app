@@ -31,19 +31,30 @@ function formatDateTime(isoDateTime) {
   }
 
   const rawValue = String(isoDateTime).trim();
-  const normalizedValue = rawValue
-    .replace(' ', 'T')
-    .replace(/\+00$/, 'Z');
+  const hasTimezoneInfo = /([zZ]|[+-]\d{2}:?\d{2})$/.test(rawValue);
 
-  let value = new Date(normalizedValue);
-  if (Number.isNaN(value.getTime())) {
-    const localMatch = rawValue.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})(?::\d{2})?/);
+  let value;
+  if (hasTimezoneInfo) {
+    const normalizedValue = rawValue
+      .replace(' ', 'T')
+      .replace(/\+00$/, 'Z');
+    value = new Date(normalizedValue);
+  } else {
+    const localMatch = rawValue.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
     if (localMatch) {
-      value = new Date(`${localMatch[1]}T${localMatch[2]}:00`);
+      value = new Date(
+        Number(localMatch[1]),
+        Number(localMatch[2]) - 1,
+        Number(localMatch[3]),
+        Number(localMatch[4]),
+        Number(localMatch[5]),
+      );
+    } else {
+      value = new Date(rawValue);
     }
   }
 
-  if (Number.isNaN(value.getTime())) {
+  if (!value || Number.isNaN(value.getTime())) {
     return {date: 'No schedule', time: '--:--'};
   }
 
