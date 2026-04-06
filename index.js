@@ -5,6 +5,7 @@ import {StatusBar} from 'expo-status-bar';
 import {NavigationContainer} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import LandingPage from './screens/LandingPage';
+import LoginAndSignup from './screens/LoginAndSignup';
 import CreateAccount from './screens/CreateAccount';
 import Login from './screens/Login.js';
 import HomepageClient from './screens/HomepageClient';
@@ -68,6 +69,7 @@ function App() {
           }}
           initialRouteName="Landing">
           <Stack.Screen name="Landing" component={LandingPage} />
+          <Stack.Screen name="LoginSignup" component={LoginAndSignup} />
           <Stack.Screen name="CreateProfile" component={CreateAccount} />
           <Stack.Screen name="Login" component={Login} />
           <Stack.Screen name="VerifyAccount" component={VerifyAccount} />
@@ -76,16 +78,10 @@ function App() {
           <Stack.Screen name="AttyLandingPage" component={AttyLandingPage} />
           <Stack.Screen name="AttyMenu" component={AttyMenu} />
           <Stack.Screen name="ClientMenu" component={ClientMenu} />
-          <Stack.Screen
-            name="ClientNotification"
-            component={ClientNotification}
-          />
+          <Stack.Screen name="ClientNotification" component={ClientNotification} />
           <Stack.Screen name="BookAppointment" component={BookAppointment} />
           <Stack.Screen name="ClientNotarial" component={ClientNotarial} />
-          <Stack.Screen
-            name="ProfileSettingsClient"
-            component={ProfileSettingsClient}
-          />
+          <Stack.Screen name="ProfileSettingsClient" component={ProfileSettingsClient} />
           <Stack.Screen name="Messages" component={Messages} />
           <Stack.Screen name="EnterConsultationChat" component={EnterConsultationChat} />
           <Stack.Screen name="AttorneyProfile" component={AttorneyProfile} />
@@ -105,7 +101,6 @@ function App() {
           <Stack.Screen name="PaymentMethod" component={PaymentMethod} />
           <Stack.Screen name="UploadIDScreen" component={UploadIDScreen} />
           <Stack.Screen name="FaceRecognitionScreen" component={FaceRecognitionScreen} />
-          {/* Attorney Additional Screens */}
           <Stack.Screen name="AttyAvailabilityManager" component={AttyAvailabilityManager} />
           <Stack.Screen name="AttyConsultationRequest" component={AttyConsultationRequest} />
           <Stack.Screen name="AttyConsultationMessage" component={AttyConsultationMessage} />

@@ -86,28 +86,52 @@ export async function signInWithEmail({ email, password }) {
   }
 
   // 4. ON SUCCESS: Wipe the failed attempts log for this user
-  await supabase.rpc('clear_failed_logins', { user_email: email });
+  try {
+    await supabase.rpc('clear_failed_logins', { user_email: email });
+  } catch (rpcError) {
+    console.warn('Failed to clear failed login attempts:', rpcError?.message || rpcError);
+  }
 
   if (data?.user) {
     const meta = data.user.user_metadata || {};
-    
-    // Fetch the canonical role from the profiles table to avoid overwriting it
-    const { data: existingProfile } = await supabase
-      .from('profiles')
-      .select('role, full_name, phone, address')
-      .eq('id', data.user.id)
-      .single();
+
+    // Fetch role from profiles when available, but never block auth if profile sync fails.
+    let existingProfile = null;
+    try {
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('role, full_name, phone, address')
+        .eq('id', data.user.id)
+        .single();
+
+      if (profileError && profileError.code !== 'PGRST116') {
+        console.warn('Failed to fetch profile during sign-in:', profileError.message);
+      }
+      existingProfile = profileData;
+    } catch (profileFetchError) {
+      console.warn('Profile fetch exception during sign-in:', profileFetchError?.message || profileFetchError);
+    }
 
     const dbRole = existingProfile?.role || meta.role || 'Client';
     const dbName = existingProfile?.full_name || meta.full_name || email;
 
-    await supabase.from('profiles').upsert({
-      id: data.user.id,
-      email: data.user.email,
-      full_name: dbName,
-      role: dbRole.charAt(0).toUpperCase() + dbRole.slice(1).toLowerCase(),
-    }, { onConflict: 'id' }).select();
-    
+    try {
+      await supabase
+        .from('profiles')
+        .upsert(
+          {
+            id: data.user.id,
+            email: data.user.email,
+            full_name: dbName,
+            role: dbRole.charAt(0).toUpperCase() + dbRole.slice(1).toLowerCase(),
+          },
+          { onConflict: 'id' }
+        )
+        .select();
+    } catch (profileUpsertError) {
+      console.warn('Profile upsert failed during sign-in:', profileUpsertError?.message || profileUpsertError);
+    }
+
     // Attach profile fields so frontend routing works
     data.user.role = dbRole;
     data.user.name = dbName;

@@ -83,7 +83,7 @@ export default function MyAppointments({navigation}) {
 
   const handleBack = () => {
     if (navigation.canGoBack()) {
-      navigation.canGoBack() ? navigation.goBack() : null;
+      navigation.goBack();
       return;
     }
     navigation.navigate('HomepageClient');
