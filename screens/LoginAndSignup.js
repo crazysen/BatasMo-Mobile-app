@@ -17,7 +17,7 @@ import {
   View,
 } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
-import { signInWithEmail } from '../services/authService';
+import { signInWithEmail, signUpWithEmail } from '../services/authService';
 
 const THEME = {
   gold: '#d4af37',
@@ -280,10 +280,25 @@ const AuthScreen = ({navigation}) => {
         return;
       }
 
-      navigation.navigate('CreateProfile', {
-        prefillName: fullName.trim(),
-        prefillEmail: email.trim(),
-      });
+      try {
+        setIsSubmitting(true);
+
+        await signUpWithEmail({
+          email: email.trim(),
+          password,
+          fullName: fullName.trim(),
+          role: 'Client',
+        });
+
+        navigation.navigate('VerifyAccount', {
+          email: email.trim(),
+          role: 'Client',
+        });
+      } catch (error) {
+        Alert.alert('Sign up failed', error?.message || 'Unable to create your account. Please try again.');
+      } finally {
+        setIsSubmitting(false);
+      }
       return;
     }
 

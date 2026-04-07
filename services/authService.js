@@ -11,13 +11,21 @@ export async function signUpWithEmail({
   guardianName,
   guardianContact
 }) {
+  const normalizedRole = String(role || 'Client').toLowerCase();
+  const roleValue =
+    normalizedRole === 'attorney'
+      ? 'Attorney'
+      : normalizedRole === 'admin'
+      ? 'Admin'
+      : 'Client';
+
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
       data: {
         full_name: fullName,
-        role: role,
+        role: roleValue,
       },
     },
   });
@@ -31,7 +39,7 @@ export async function signUpWithEmail({
       id: data.user.id,
       email: email,
       full_name: fullName,
-      role: role.charAt(0).toUpperCase() + role.slice(1).toLowerCase(),
+      role: roleValue,
       phone: phone || null,
       age: age || null,
       address: address || null,
@@ -46,7 +54,7 @@ export async function signUpWithEmail({
     }
     
     // Attach profile fields so frontend routing works
-    data.user.role = role;
+    data.user.role = roleValue;
     data.user.name = fullName;
     data.user.phone = phone;
     data.user.address = address;
