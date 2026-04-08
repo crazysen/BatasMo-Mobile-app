@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -26,6 +26,7 @@ const THEME = {
   textSecondary: '#a7b4b7',
   card: 'rgba(8, 18, 26, 0.66)',
   cardBorder: 'rgba(255, 255, 255, 0.10)',
+  success: '#4ADE80',
 };
 
 const AnimatedImageBackground = Animated.createAnimatedComponent(ImageBackground);
@@ -89,10 +90,18 @@ const AuthInputField = ({
   </View>
 );
 
+const RequirementRow = ({ label, isMet }) => (
+  <View style={styles.requirementRow}>
+    <View style={[styles.reqCircle, isMet && styles.reqCircleMet]}>
+      {isMet && <Ionicons name="checkmark" size={12} color="#050b12" />}
+    </View>
+    <Text style={[styles.requirementText, isMet && styles.requirementTextMet]}>{label}</Text>
+  </View>
+);
+
 const AuthScreen = ({navigation}) => {
   const [screenState, setScreenState] = useState('LOGIN');
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [email, setEmail] = useState('');
@@ -112,6 +121,25 @@ const AuthScreen = ({navigation}) => {
   const buttonGlow = useRef(new Animated.Value(0)).current;
 
   const isLogin = screenState === 'LOGIN';
+
+  const passwordChecks = useMemo(() => {
+    const hasMinLength = password.length >= 8;
+    const hasNumber = /\d/.test(password);
+    const hasSpecial = /[^A-Za-z0-9]/.test(password);
+    return { hasMinLength, hasNumber, hasSpecial };
+  }, [password]);
+
+  const strengthScore = useMemo(
+    () => [passwordChecks.hasMinLength, passwordChecks.hasNumber, passwordChecks.hasSpecial].filter(Boolean).length,
+    [passwordChecks],
+  );
+
+  const strengthLabel = useMemo(() => {
+    if (strengthScore <= 1) return 'Weak';
+    if (strengthScore === 2) return 'Medium';
+    return 'Strong';
+  }, [strengthScore]);
+
   const headerTitle = isLogin ? 'Welcome back' : 'Create your account';
   const headerSub = isLogin
     ? 'Sign in to continue your legal workspace.'
@@ -275,6 +303,10 @@ const AuthScreen = ({navigation}) => {
         Alert.alert('Password mismatch', 'Passwords do not match.');
         return;
       }
+      if (!passwordChecks.hasMinLength || !passwordChecks.hasNumber || !passwordChecks.hasSpecial) {
+        Alert.alert('Weak Password', 'Please meet all password requirements.');
+        return;
+      }
       if (!agreeTerms) {
         Alert.alert('Terms required', 'Please agree to the Terms and Conditions to continue.');
         return;
@@ -325,6 +357,16 @@ const AuthScreen = ({navigation}) => {
       }
     } catch (error) {
       const message = error?.message || 'Unable to sign in. Please try again.';
+      const normalized = String(message).toLowerCase();
+
+      if (normalized.includes('email not confirmed') || normalized.includes('email not verified')) {
+        Alert.alert('Email Not Verified', 'Please verify your account using the code sent to your email.');
+        navigation.navigate('VerifyAccount', {
+          email: email.trim(),
+          role: 'Client',
+        });
+        return;
+      }
 
       if (message.startsWith('LOCKOUT:')) {
         const seconds = parseInt(message.split(':')[1], 10);
@@ -461,29 +503,60 @@ const AuthScreen = ({navigation}) => {
             />
           )}
 
-          <View style={styles.optionsRow}>
-            <TouchableOpacity
-              style={[styles.checkboxRow, !isLogin && styles.checkboxRowSignup]}
-              onPress={() => (isLogin ? setRememberMe(!rememberMe) : setAgreeTerms(!agreeTerms))}
-            >
-              <View style={[styles.checkbox, (isLogin ? rememberMe : agreeTerms) && styles.checkboxChecked]}>
-                {(isLogin ? rememberMe : agreeTerms) && <Ionicons name="checkmark" size={12} color={THEME.gold} />}
+          {!isLogin && (
+            <>
+              <View style={styles.strengthRow}>
+                <Text style={styles.strengthLabel}>Password Strength</Text>
+                <Text style={[styles.strengthValue, strengthScore === 3 && styles.strengthStrong]}>
+                  {strengthLabel}
+                </Text>
               </View>
-              <Text style={[styles.optionText, !isLogin && styles.optionTextSignup]}>
-                {isLogin ? 'Remember me' : 'I agree to the Terms and Conditions'}
-              </Text>
-            </TouchableOpacity>
 
-            {isLogin ? (
-              <TouchableOpacity onPress={() => navigation.navigate('ResetPassword')}>
+              <View style={styles.progressTrack}>
+                <View
+                  style={[
+                    styles.progressFill,
+                    {
+                      width: `${(strengthScore / 3) * 100}%`,
+                      backgroundColor: strengthScore === 3 ? THEME.success : THEME.gold,
+                    },
+                  ]}
+                />
+              </View>
+
+              <View style={styles.requirementsContainer}>
+                <Text style={styles.reqTitle}>PASSWORD REQUIREMENTS</Text>
+                <RequirementRow label="At least 8 characters" isMet={passwordChecks.hasMinLength} />
+                <RequirementRow label="Contains a number" isMet={passwordChecks.hasNumber} />
+                <RequirementRow label="Contains a special character" isMet={passwordChecks.hasSpecial} />
+              </View>
+            </>
+          )}
+
+          {isLogin ? (
+            <View style={styles.loginForgotRow}>
+              <TouchableOpacity
+                onPress={() => navigation.navigate('VerifyIdentity', {email: email.trim()})}>
                 <Text style={styles.linkText}>Forgot password?</Text>
               </TouchableOpacity>
-            ) : (
+            </View>
+          ) : (
+            <View style={styles.optionsRow}>
+              <TouchableOpacity
+                style={[styles.checkboxRow, styles.checkboxRowSignup]}
+                onPress={() => setAgreeTerms(!agreeTerms)}>
+                <View style={[styles.checkbox, agreeTerms && styles.checkboxChecked]}>
+                  {agreeTerms && <Ionicons name="checkmark" size={12} color={THEME.gold} />}
+                </View>
+                <Text style={[styles.optionText, styles.optionTextSignup]}>
+                  I agree to the Terms and Conditions
+                </Text>
+              </TouchableOpacity>
               <TouchableOpacity style={styles.termsLinkWrap} onPress={() => setShowTermsModal(true)}>
                 <Text style={styles.linkText}>Terms</Text>
               </TouchableOpacity>
-            )}
-          </View>
+            </View>
+          )}
 
           <PressScaleButton
             style={styles.primaryButtonWrap}
@@ -758,6 +831,79 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
+  },
+  strengthRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 2,
+    marginBottom: 8,
+  },
+  strengthLabel: {
+    color: THEME.textSecondary,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  strengthValue: {
+    color: THEME.gold,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  strengthStrong: {
+    color: THEME.success,
+  },
+  progressTrack: {
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    overflow: 'hidden',
+    marginBottom: 14,
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 999,
+  },
+  requirementsContainer: {
+    marginBottom: 6,
+  },
+  reqTitle: {
+    color: THEME.textSecondary,
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    marginBottom: 12,
+  },
+  requirementRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  reqCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: THEME.textSecondary,
+    marginRight: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reqCircleMet: {
+    backgroundColor: THEME.success,
+    borderColor: THEME.success,
+  },
+  requirementText: {
+    color: THEME.textSecondary,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  requirementTextMet: {
+    color: THEME.textMain,
+  },
+  loginForgotRow: {
+    alignItems: 'flex-end',
+    marginBottom: 18,
+    marginTop: 4,
   },
   optionsRow: {
     flexDirection: 'row',

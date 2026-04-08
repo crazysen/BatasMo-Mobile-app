@@ -3,7 +3,7 @@ import { supabase } from './supabaseClient';
 export async function getAttorneys() {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, full_name, email, avatar_url, attorney_profiles(firm_name, years_experience, specialties, bio, consultation_fee, is_verified)')
+    .select('id, full_name, email, avatar_url, attorney_profiles(firm_name, years_experience, specialties, consultation_fee, is_verified)')
     .eq('role', 'Attorney')
     .order('full_name', { ascending: true });
 

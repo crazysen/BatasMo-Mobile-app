@@ -11,6 +11,7 @@ import {
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {MaterialCommunityIcons} from '@expo/vector-icons';
 import {
+  formatAppointmentNotesForDisplay,
   getMyAppointments,
   updateAppointmentStatus,
 } from '../services/appointmentService';
@@ -18,7 +19,6 @@ import {
 function resolveScheduleValue(item) {
   return (
     item?.scheduled_at ||
-    item?.preferred_date ||
     item?.updated_at ||
     item?.created_at ||
     null
@@ -139,7 +139,9 @@ export default function AttyMyAppointments({navigation}) {
                   <Text style={styles.metaText}>🕒 {time}</Text>
                 </View>
 
-                <Text style={styles.notesText}>📝 {item.notes || 'No notes provided'}</Text>
+                <Text style={styles.notesText}>
+                  📝 {formatAppointmentNotesForDisplay(item.notes) || 'No notes provided'}
+                </Text>
 
                 {status === 'PENDING' && (
                   <View style={styles.actionRow}>
@@ -183,6 +185,7 @@ export default function AttyMyAppointments({navigation}) {
                             name: item.client_name ?? 'Client',
                             date,
                             time,
+                            scheduled_at: item.scheduled_at,
                           },
                           returnRoute: 'AttyMyAppointments',
                         })

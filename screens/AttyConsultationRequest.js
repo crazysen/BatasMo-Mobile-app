@@ -14,7 +14,6 @@ import {getMyAppointments, updateAppointmentStatus} from '../services/appointmen
 function resolveScheduleValue(item) {
   return (
     item?.scheduled_at ||
-    item?.preferred_date ||
     item?.updated_at ||
     item?.created_at ||
     null

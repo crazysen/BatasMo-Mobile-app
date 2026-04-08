@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { signOutCurrentUser } from '../services/authService';
 
 const AttorneySidebar = ({navigation, route}) => {
   const stackState = navigation.getState();
@@ -37,10 +38,15 @@ const AttorneySidebar = ({navigation, route}) => {
     navigation.navigate('AttyProfileSettings');
   };
 
-  const handleTerminate = () => {
+  const handleTerminate = async () => {
+    try {
+      await signOutCurrentUser();
+    } catch {
+      // Still leave the app shell; session may already be cleared
+    }
     navigation.reset({
       index: 0,
-      routes: [{name: 'Login'}],
+      routes: [{name: 'Landing'}],
     });
   };
 

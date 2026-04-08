@@ -1,5 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {getAppointmentMessages, sendAppointmentMessage} from './messageService';
+import {
+  getAppointmentMessages,
+  sendAppointmentMessage,
+  subscribeToRoomMessages,
+  uploadAndSendChatAttachment,
+} from './messageService';
 
 const CHAT_PREFIX = 'chat_thread_';
 
@@ -20,12 +25,20 @@ function normalizeIsMine(value) {
   return false;
 }
 
-function mapApiMessage(item) {
+export function mapApiMessage(item) {
   const createdAt = item?.created_at || new Date().toISOString();
   const isMine = normalizeIsMine(item?.is_mine);
+  const type = item?.message_type || 'text';
   return {
     id: String(item?.id || `${Date.now()}-${Math.floor(Math.random() * 1000)}`),
     text: String(item?.message || item?.text || ''),
+    is_closed: Boolean(item?.is_closed),
+    message_type: type,
+    file_bucket: item?.file_bucket ?? null,
+    file_path: item?.file_path ?? null,
+    file_name: item?.file_name ?? null,
+    mime_type: item?.mime_type ?? null,
+    file_size_bytes: item?.file_size_bytes ?? null,
     sender: isMine ? 'me' : 'client',
     time: new Date(createdAt).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}),
     created_at: createdAt,
@@ -52,6 +65,7 @@ async function appendLocalThreadMessage(threadId, payload) {
   const message = {
     id: `${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     text: String(payload?.text || '').trim(),
+    message_type: 'text',
     sender: payload?.sender === 'me' ? 'me' : 'client',
     time: payload?.time || nowTimeLabel(),
     created_at: new Date().toISOString(),
@@ -66,19 +80,29 @@ async function appendLocalThreadMessage(threadId, payload) {
   return next;
 }
 
+function mergeById(existing, incoming) {
+  const byId = new Map(existing.map(m => [m.id, m]));
+  byId.set(incoming.id, incoming);
+  return Array.from(byId.values()).sort(
+    (a, b) =>
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+  );
+}
+
 export async function getThreadMessages(threadId) {
   try {
     const rows = await getAppointmentMessages(threadId);
     if (Array.isArray(rows)) {
+      const messages = rows.map(mapApiMessage);
       return {
-        messages: rows.map(mapApiMessage),
-        isClosed: rows.length > 0 ? rows[0].is_closed : false,
+        messages,
+        isClosed: messages.length > 0 ? messages[0].is_closed : false,
       };
     }
-    return { messages: [], isClosed: false };
+    return {messages: [], isClosed: false};
   } catch (_) {
     const local = await getLocalThreadMessages(threadId);
-    return { messages: local, isClosed: false };
+    return {messages: local, isClosed: false};
   }
 }
 
@@ -97,25 +121,53 @@ export async function appendThreadMessage(threadId, payload) {
   }
 }
 
+/**
+ * @param {string} threadId appointment id
+ * @param {{ uri: string, fileName: string, mime: string, size: number, caption?: string }} asset
+ */
+export async function appendThreadAttachment(threadId, asset) {
+  try {
+    await uploadAndSendChatAttachment(threadId, asset);
+    return getThreadMessages(threadId);
+  } catch (e) {
+    throw e;
+  }
+}
+
+/**
+ * Live updates: call onMessages with full merged list when a new row arrives.
+ * @returns {Promise<() => void>}
+ */
+export async function attachThreadRealtime(threadId, setMessages) {
+  const unsub = await subscribeToRoomMessages(threadId, mapped => {
+    const ui = mapApiMessage(mapped);
+    setMessages(prev => mergeById(prev, ui));
+  });
+  return unsub;
+}
+
 export async function ensureThreadSeed(threadId, seedMessages) {
   try {
     return await getThreadMessages(threadId);
   } catch (_) {
     const existing = await getLocalThreadMessages(threadId);
     if (existing.length > 0) {
-      return { messages: existing, isClosed: false };
+      return {messages: existing, isClosed: false};
     }
 
-    const normalizedSeed = (Array.isArray(seedMessages) ? seedMessages : []).map((item, index) => ({
-      id: item?.id || `seed-${index + 1}`,
-      text: String(item?.text || ''),
-      sender: item?.sender === 'me' ? 'me' : 'client',
-      time: item?.time || nowTimeLabel(),
-      created_at: item?.created_at || new Date().toISOString(),
-    }));
+    const normalizedSeed = (Array.isArray(seedMessages) ? seedMessages : []).map(
+      (item, index) => ({
+        id: item?.id || `seed-${index + 1}`,
+        text: String(item?.text || ''),
+        message_type: 'text',
+        sender: item?.sender === 'me' ? 'me' : 'client',
+        time: item?.time || nowTimeLabel(),
+        created_at: item?.created_at || new Date().toISOString(),
+      }),
+    );
 
     const key = buildThreadKey(threadId);
     await AsyncStorage.setItem(key, JSON.stringify(normalizedSeed));
-    return { messages: normalizedSeed, isClosed: false };
+    return {messages: normalizedSeed, isClosed: false};
   }
 }

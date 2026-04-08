@@ -29,12 +29,12 @@ const AcceptRequestScreen = ({ navigation, route }) => {
   const title = request?.service_type || route?.params?.title || 'Notarial Request';
   const user = request?.client_name || route?.params?.user || 'Client';
   const caseId = request?.id || route?.params?.caseId || 'N/A';
-  const preferredDate = useMemo(() => {
-    if (!request?.preferred_date) return 'No preferred date set';
-    const value = new Date(request.preferred_date);
-    if (Number.isNaN(value.getTime())) return 'No preferred date set';
+  const submittedAtLabel = useMemo(() => {
+    if (!request?.created_at) return '—';
+    const value = new Date(request.created_at);
+    if (Number.isNaN(value.getTime())) return '—';
     return value.toLocaleString();
-  }, [request?.preferred_date]);
+  }, [request?.created_at]);
 
   const documentName = request?.document_url
     ? request.document_url.split('/').pop()
@@ -53,7 +53,7 @@ const AcceptRequestScreen = ({ navigation, route }) => {
         title,
         user,
         caseId,
-        preferredDate,
+        submittedAt: submittedAtLabel,
       });
     } catch (error) {
       Alert.alert('Error', error?.message || 'Unable to accept request.');
@@ -101,7 +101,7 @@ const AcceptRequestScreen = ({ navigation, route }) => {
             <Text style={styles.clientName}>Client: <Text style={styles.darkText}>{user}</Text></Text>
             <View style={styles.dateRow}>
               <Calendar size={14} color="#94a3b8" />
-              <Text style={styles.dateText}>{preferredDate}</Text>
+              <Text style={styles.dateText}>Submitted: {submittedAtLabel}</Text>
             </View>
           </View>
         </View>

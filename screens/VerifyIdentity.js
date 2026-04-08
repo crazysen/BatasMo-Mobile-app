@@ -1,6 +1,11 @@
-import React, {useState, useRef} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import {
+  Animated,
   Alert,
+  Easing,
+  ImageBackground,
+  Platform,
+  ScrollView,
   StyleSheet,
   View,
   Text,
@@ -8,31 +13,96 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import {
   startPasswordRecovery,
   verifyRecoveryOtp,
 } from '../services/authService';
 
-const colors = {
-  bg: '#F8FAFC',
-  card: '#FFFFFF',
-  border: '#E2E8F0',
-  text: '#0F172A',
-  muted: '#64748B',
-  primary: '#0F172A',
-  accent: '#EAB308',
+const THEME = {
+  gold: '#d4af37',
+  textMain: '#f6f8f8',
+  textSecondary: '#a7b4b7',
+  card: 'rgba(8, 18, 26, 0.66)',
+  cardBorder: 'rgba(255, 255, 255, 0.10)',
+};
+
+const AnimatedImageBackground = Animated.createAnimatedComponent(ImageBackground);
+
+const PressScaleButton = ({
+  children,
+  onPress,
+  style,
+  contentStyle,
+  scaleTo = 0.96,
+  activeOpacity = 0.92,
+  disabled = false,
+}) => {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  const animateTo = value => {
+    Animated.spring(scale, {
+      toValue: value,
+      useNativeDriver: true,
+      speed: 26,
+      bounciness: 8,
+    }).start();
+  };
+
+  return (
+    <TouchableOpacity
+      activeOpacity={activeOpacity}
+      onPress={onPress}
+      onPressIn={() => !disabled && animateTo(scaleTo)}
+      onPressOut={() => !disabled && animateTo(1)}
+      style={style}
+      disabled={disabled}>
+      <Animated.View style={[contentStyle, {transform: [{scale}]}]}>{children}</Animated.View>
+    </TouchableOpacity>
+  );
 };
 
 export default function VerifyIdentity({navigation, route}) {
   const [email, setEmail] = useState(route?.params?.email ?? '');
   const [code, setCode] = useState(['', '', '', '', '', '']);
   const [hasRequestedCode, setHasRequestedCode] = useState(false);
-  const [focusedIndex, setFocusedIndex] = useState(null);
   const [isSending, setIsSending] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const inputRefs = useRef([]);
 
+  const introOpacity = useRef(new Animated.Value(0)).current;
+  const introTranslateY = useRef(new Animated.Value(20)).current;
+  const introScale = useRef(new Animated.Value(0.98)).current;
+  const bgScale = useRef(new Animated.Value(0)).current;
+  const bgDrift = useRef(new Animated.Value(0)).current;
+  const auraA = useRef(new Animated.Value(0)).current;
+  const auraB = useRef(new Animated.Value(0)).current;
+  const buttonGlow = useRef(new Animated.Value(0)).current;
+
   const isValidEmail = value => value.includes('@') && value.includes('.');
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(introOpacity, {toValue: 1, duration: 700, easing: Easing.out(Easing.cubic), useNativeDriver: true}),
+      Animated.timing(introTranslateY, {toValue: 0, duration: 700, easing: Easing.out(Easing.cubic), useNativeDriver: true}),
+      Animated.timing(introScale, {toValue: 1, duration: 700, easing: Easing.out(Easing.cubic), useNativeDriver: true}),
+      Animated.timing(bgScale, {toValue: 1, duration: 1200, easing: Easing.out(Easing.cubic), useNativeDriver: true}),
+    ]).start();
+
+    const loop = (ref, duration) => {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(ref, {toValue: 1, duration, easing: Easing.inOut(Easing.sin), useNativeDriver: true}),
+          Animated.timing(ref, {toValue: 0, duration, easing: Easing.inOut(Easing.sin), useNativeDriver: true}),
+        ])
+      ).start();
+    };
+
+    loop(bgDrift, 9000);
+    loop(auraA, 2400);
+    loop(auraB, 3000);
+    loop(buttonGlow, 1300);
+  }, [auraA, auraB, bgDrift, bgScale, buttonGlow, introOpacity, introScale, introTranslateY]);
 
   const requestRecoveryCode = async () => {
     if (!email) {
@@ -93,7 +163,6 @@ export default function VerifyIdentity({navigation, route}) {
   };
 
   const handleKeyPress = (e, index) => {
-    // Handle backspace - go to previous input if current is empty
     if (e.nativeEvent.key === 'Backspace' && !code[index] && index > 0) {
       inputRefs.current[index - 1]?.focus();
     }
@@ -117,7 +186,6 @@ export default function VerifyIdentity({navigation, route}) {
         token: code.join(''),
       });
 
-      // Use stack reset so recovery flow cannot be overridden by any prior route state.
       navigation.reset({
         index: 0,
         routes: [{name: 'ResetPassword', params: {email: email.trim()}}],
@@ -132,32 +200,68 @@ export default function VerifyIdentity({navigation, route}) {
     }
   };
 
+  const containerStyle = {
+    opacity: introOpacity,
+    transform: [{translateY: introTranslateY}, {scale: introScale}],
+  };
+
+  const bgTransform = {
+    transform: [
+      {scale: bgScale.interpolate({inputRange: [0, 1], outputRange: [1.1, 1.22]})},
+      {translateY: bgDrift.interpolate({inputRange: [0, 1], outputRange: [0, -18]})},
+    ],
+  };
+
+  const handleBack = () => {
+    if (navigation?.canGoBack?.()) {
+      navigation.goBack();
+      return;
+    }
+    navigation.navigate('Login');
+  };
+
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.contentWrap}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.navigate('Login')}>
-          <Text style={styles.backButtonText}>← Back</Text>
-        </TouchableOpacity>
+      <View style={styles.backgroundLayer} pointerEvents="none">
+        <AnimatedImageBackground
+          source={require('../assets/images/bg.jpg')}
+          resizeMode="cover"
+          style={[styles.backgroundImage, bgTransform]}>
+          <View style={styles.tintDeepBlue} />
+          <View style={styles.tintDark} />
+        </AnimatedImageBackground>
+        <Animated.View style={[styles.aura, styles.auraLeft, {opacity: auraA.interpolate({inputRange: [0, 1], outputRange: [0.4, 0.88]})}]} />
+        <Animated.View style={[styles.aura, styles.auraRight, {opacity: auraB.interpolate({inputRange: [0, 1], outputRange: [0.28, 0.72]})}]} />
+      </View>
 
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>SECURE VERIFICATION</Text>
-        </View>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <Animated.View style={[styles.topBar, containerStyle]}>
+          <PressScaleButton style={styles.backButtonWrap} contentStyle={styles.backButton} onPress={handleBack}>
+            <Ionicons name="chevron-back" size={18} color={THEME.textSecondary} />
+            <Text style={styles.backText}>Back</Text>
+          </PressScaleButton>
+          <View style={styles.brandBadge}>
+            <Text style={styles.brandBadgeText}>Batas Mo</Text>
+          </View>
+        </Animated.View>
 
-        <Text style={styles.title}>Verify Identity</Text>
-        <Text style={styles.subtitle}>
-          Enter the 6-digit code sent to your email. After verification, you will go to Reset Password.
-        </Text>
+        <Animated.View style={[styles.heroCard, containerStyle]}>
+          <Text style={styles.headerTitle}>Verify Identity</Text>
+          <Text style={styles.headerSub}>
+            Enter your email and the 6-digit recovery code sent to your inbox.
+          </Text>
+        </Animated.View>
 
-        <View style={styles.card}>
+        <Animated.View style={[styles.formCard, containerStyle]}>
           {!hasRequestedCode && (
             <>
-              <Text style={styles.label}>EMAIL ADDRESS</Text>
+              <Text style={styles.inputLabel}>EMAIL ADDRESS</Text>
               <TextInput
                 style={styles.emailInput}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 placeholder="name@domain.com"
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor={THEME.textSecondary}
                 value={email}
                 onChangeText={value => {
                   setEmail(value);
@@ -168,215 +272,135 @@ export default function VerifyIdentity({navigation, route}) {
                 }}
               />
 
-              <TouchableOpacity
-                style={[styles.sendButton, isSending && styles.buttonDisabled]}
+              <PressScaleButton
+                style={[styles.primaryButtonWrap, isSending && styles.disabledWrap]}
+                contentStyle={styles.primaryButton}
                 onPress={requestRecoveryCode}
                 disabled={isSending}>
-                <Text style={styles.sendButtonText}>
-                  {isSending ? 'Sending...' : 'Send 6-Digit Code'}
-                </Text>
-              </TouchableOpacity>
+                <Animated.View style={[styles.buttonGlow, {opacity: buttonGlow}]} />
+                <Text style={styles.primaryButtonText}>{isSending ? 'SENDING...' : 'SEND 6-DIGIT CODE'}</Text>
+              </PressScaleButton>
             </>
           )}
 
           {hasRequestedCode && (
             <>
               <Text style={styles.codeSentText}>Code sent to {email.trim()}.</Text>
-              <Text style={styles.label}>SECURE CODE</Text>
+              <Text style={styles.inputLabel}>SECURE CODE</Text>
 
-              <TouchableOpacity
-                style={styles.otpTouchZone}
-                activeOpacity={1}
-                onPress={focusFirstEmptyInput}>
-                <View style={styles.otpRow}>
-                  {[0, 1, 2, 3, 4, 5].map(index => (
-                    <TextInput
-                      key={index}
-                      ref={ref => (inputRefs.current[index] = ref)}
-                      style={[
-                        styles.otpInput,
-                        focusedIndex === index && styles.otpInputFocused,
-                      ]}
-                      keyboardType="number-pad"
-                      maxLength={1}
-                      value={code[index]}
-                      onChangeText={value => handleCodeChange(value, index)}
-                      onKeyPress={e => handleKeyPress(e, index)}
-                      onFocus={() => setFocusedIndex(index)}
-                      onBlur={() => setFocusedIndex(null)}
-                      autoComplete="one-time-code"
-                      textContentType="oneTimeCode"
-                      selectTextOnFocus
-                    />
-                  ))}
-                </View>
-              </TouchableOpacity>
+              <View style={styles.otpRow}>
+                {[0, 1, 2, 3, 4, 5].map(index => (
+                  <TextInput
+                    key={index}
+                    ref={ref => (inputRefs.current[index] = ref)}
+                    style={[styles.otpInput, code[index] !== '' && styles.otpInputActive]}
+                    keyboardType="number-pad"
+                    maxLength={1}
+                    value={code[index]}
+                    onChangeText={value => handleCodeChange(value, index)}
+                    onKeyPress={e => handleKeyPress(e, index)}
+                    autoComplete="one-time-code"
+                    textContentType="oneTimeCode"
+                    selectTextOnFocus
+                  />
+                ))}
+              </View>
 
-              <TouchableOpacity
-                style={styles.resendContainer}
-                onPress={requestRecoveryCode}
-                disabled={isSending}>
-                <Text style={styles.resendText}>
-                  Didn't receive the code?{' '}
-                  <Text style={styles.resendLink}>
-                    {isSending ? 'Sending...' : 'Resend Code'}
-                  </Text>
-                </Text>
-              </TouchableOpacity>
+              <View style={styles.resendRow}>
+                <Text style={styles.footerText}>Didn't receive the code? </Text>
+                <TouchableOpacity onPress={requestRecoveryCode} disabled={isSending}>
+                  <Text style={styles.linkText}>{isSending ? 'Sending...' : 'Resend Code'}</Text>
+                </TouchableOpacity>
+              </View>
 
-              <TouchableOpacity
-                style={[styles.primaryButton, isVerifying && styles.buttonDisabled]}
+              <PressScaleButton
+                style={[styles.primaryButtonWrap, isVerifying && styles.disabledWrap]}
+                contentStyle={styles.primaryButton}
                 onPress={handleVerify}
                 disabled={isVerifying}>
-                <Text style={styles.buttonText}>
-                  {isVerifying ? 'Verifying...' : 'Verify & Proceed'}
-                </Text>
-              </TouchableOpacity>
+                <Animated.View style={[styles.buttonGlow, {opacity: buttonGlow}]} />
+                <Text style={styles.primaryButtonText}>{isVerifying ? 'VERIFYING...' : 'VERIFY & PROCEED'}</Text>
+              </PressScaleButton>
             </>
           )}
-        </View>
-      </View>
+
+          <TouchableOpacity style={styles.footerRow} onPress={() => navigation.navigate('Login')}>
+            <Ionicons name="arrow-back" size={14} color={THEME.textSecondary} style={{marginRight: 6}} />
+            <Text style={styles.footerText}>Back to Log In</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {flex: 1, backgroundColor: colors.bg},
-  contentWrap: {paddingHorizontal: 20, paddingTop: 22},
-  backButton: {
-    alignSelf: 'flex-start',
-    marginBottom: 16,
-    paddingVertical: 4,
-  },
-  backButtonText: {
-    color: colors.accent,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  badge: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#FEF3C7',
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+  container: {flex: 1, backgroundColor: '#050b12'},
+  backgroundLayer: {...StyleSheet.absoluteFillObject, overflow: 'hidden'},
+  backgroundImage: {...StyleSheet.absoluteFillObject, left: -24, right: -24, top: -24, bottom: -24},
+  tintDeepBlue: {...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(4, 18, 44, 0.56)'},
+  tintDark: {...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(3, 9, 15, 0.18)'},
+  aura: {position: 'absolute', borderRadius: 999},
+  auraLeft: {top: 56, left: -74, width: 220, height: 220, backgroundColor: 'rgba(75, 121, 214, 0.24)'},
+  auraRight: {bottom: -30, right: -100, width: 280, height: 280, backgroundColor: 'rgba(212, 175, 55, 0.12)'},
+  scrollContent: {paddingHorizontal: 18, paddingTop: 10, paddingBottom: 36},
+  topBar: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14},
+  backButtonWrap: {borderRadius: 999},
+  backButton: {flexDirection: 'row', alignItems: 'center', gap: 4},
+  backText: {color: THEME.textSecondary, fontSize: 15, fontWeight: '600'},
+  brandBadge: {
     borderWidth: 1,
-    borderColor: '#FDE68A',
-    marginBottom: 10,
+    borderColor: 'rgba(212, 175, 55, 0.18)',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
   },
-  badgeText: {
-    color: '#92400E',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.8,
+  brandBadgeText: {color: '#f6f8f8', fontSize: 12, fontWeight: '900', letterSpacing: 1.3},
+  heroCard: {backgroundColor: THEME.card, borderRadius: 28, padding: 24, borderWidth: 1, borderColor: THEME.cardBorder, marginBottom: 14},
+  headerTitle: {
+    color: THEME.textMain,
+    fontSize: 32,
+    fontWeight: '900',
+    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
+    textAlign: 'center',
   },
-  title: {
-    fontSize: 34,
-    fontWeight: '800',
-    color: colors.text,
-    marginBottom: 8,
-  },
-  subtitle: {
-    color: colors.muted,
-    lineHeight: 21,
-    marginBottom: 20,
+  headerSub: {color: THEME.textSecondary, marginTop: 12, fontSize: 15, lineHeight: 22, textAlign: 'center', paddingHorizontal: 10},
+  formCard: {backgroundColor: 'rgba(9, 18, 26, 0.88)', borderRadius: 28, padding: 20, borderWidth: 1, borderColor: 'rgba(212, 175, 55, 0.12)'},
+  inputLabel: {color: THEME.textSecondary, fontSize: 12, marginBottom: 12, fontWeight: '800', letterSpacing: 1.5, textAlign: 'center'},
+  emailInput: {
+    backgroundColor: 'rgba(11, 20, 29, 0.94)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 14,
+    height: 56,
+    paddingHorizontal: 16,
+    color: THEME.textMain,
     fontSize: 15,
+    marginBottom: 20,
   },
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 20,
-    shadowColor: '#0F172A',
-    shadowOpacity: 0.08,
-    shadowRadius: 20,
-    shadowOffset: {width: 0, height: 10},
-    elevation: 4,
-  },
-  label: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#334155',
-    letterSpacing: 1.2,
-    marginBottom: 14,
-  },
-  codeSentText: {
-    color: colors.muted,
-    fontSize: 13,
-    marginBottom: 12,
-  },
-  otpRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  otpTouchZone: {
-    width: '100%',
-  },
+  codeSentText: {color: THEME.textSecondary, textAlign: 'center', marginBottom: 12},
+  otpRow: {flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24},
   otpInput: {
-    width: 46,
-    height: 60,
+    width: 48,
+    height: 62,
+    backgroundColor: 'rgba(11, 20, 29, 0.94)',
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 16,
+    color: THEME.textMain,
     textAlign: 'center',
     fontSize: 24,
     fontWeight: '700',
-    color: colors.text,
-    backgroundColor: '#FFFFFF',
   },
-  otpInputFocused: {
-    borderColor: '#94A3B8',
-    backgroundColor: '#F8FAFC',
-  },
-  emailInput: {
-    height: 52,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    fontSize: 15,
-    color: colors.text,
-    backgroundColor: '#fff',
-    marginBottom: 12,
-  },
-  sendButton: {
-    backgroundColor: '#1E293B',
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginBottom: 18,
-  },
-  sendButtonText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  buttonDisabled: {
-    opacity: 0.7,
-  },
-  resendContainer: {
-    marginTop: 18,
-    marginBottom: 18,
-    alignItems: 'center',
-  },
-  resendText: {color: colors.muted, fontSize: 13},
-  resendLink: {color: '#D97706', fontWeight: '700'},
-  primaryButton: {
-    backgroundColor: colors.primary,
-    paddingVertical: 16,
-    borderRadius: 14,
-    shadowColor: colors.primary,
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    shadowOffset: {width: 0, height: 4},
-    elevation: 3,
-  },
-  buttonText: {
-    color: '#FFFFFF',
-    textAlign: 'center',
-    fontWeight: '800',
-    fontSize: 16,
-    letterSpacing: 0.4,
-  },
+  otpInputActive: {borderColor: THEME.gold, backgroundColor: 'rgba(212, 175, 55, 0.05)'},
+  resendRow: {flexDirection: 'row', justifyContent: 'center', marginBottom: 24},
+  footerRow: {flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 22},
+  footerText: {color: THEME.textSecondary, fontSize: 14},
+  linkText: {color: THEME.gold, fontWeight: '800', fontSize: 14},
+  primaryButton: {backgroundColor: THEME.gold, height: 56, borderRadius: 16, justifyContent: 'center', alignItems: 'center', overflow: 'hidden'},
+  primaryButtonWrap: {shadowColor: THEME.gold, shadowOpacity: 0.3, shadowRadius: 15, elevation: 5},
+  buttonGlow: {position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(255, 255, 255, 0.15)'},
+  primaryButtonText: {color: '#091115', fontWeight: '900', fontSize: 15, letterSpacing: 1.5},
+  disabledWrap: {opacity: 0.7},
 });
-

@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { signOutCurrentUser } from '../services/authService';
 
 const menuItems = [
   {name: 'Dashboard', icon: '🏠', route: 'HomepageClient'},
@@ -44,10 +45,17 @@ export default function ClientMenu({navigation, route}) {
         { 
           text: 'Logout', 
           style: 'destructive',
-          onPress: () => navigation.reset({
-            index: 0,
-            routes: [{ name: 'Landing' }],
-          })
+          onPress: async () => {
+            try {
+              await signOutCurrentUser();
+            } catch {
+              // still leave app
+            }
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'Landing' }],
+            });
+          },
         },
       ]
     );

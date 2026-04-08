@@ -1,10 +1,10 @@
 import React, {useCallback, useEffect, useState} from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   ActivityIndicator,
   Alert,
   FlatList,
   Image,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -12,6 +12,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {getAttorneys} from '../services/attorneyService';
+
+const ATTORNEYS_CACHE_KEY = 'book_attorneys_cache_v1';
+const ATTORNEYS_CACHE_TTL_MS = 5 * 60 * 1000;
 
 const AttorneyCard = ({item, navigation}) => (
   <View style={styles.card}>
@@ -58,42 +61,63 @@ const AttorneyCard = ({item, navigation}) => (
 export default function BookAppointment({navigation}) {
   const [attorneys, setAttorneys] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedSpecialty, setSelectedSpecialty] = useState('All');
 
-  const specialties = ['All', 'Corporate Law', 'Family Law', 'Property Law', 'Criminal Law'];
-
-  const filteredAttorneys = selectedSpecialty === 'All' 
-    ? attorneys 
-    : attorneys.filter(a => a.specialty?.includes(selectedSpecialty) || a.specialty === selectedSpecialty);
+  const mapRecords = useCallback(records => {
+    return (Array.isArray(records) ? records : []).map(record => ({
+      id: record.id,
+      name: record.full_name || record.email || 'Attorney',
+      specialty: record.specialties || 'General Practice',
+      experience: record.years_experience
+        ? `${record.years_experience} years experience`
+        : 'Experience not set',
+      rating: '4.9',
+      price: record.consultation_fee
+        ? `₱${Number(record.consultation_fee).toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}`
+        : '₱2,500.00',
+      image: record.avatar_url || `https://i.pravatar.cc/150?u=${encodeURIComponent(record.email || record.id)}`,
+    }));
+  }, []);
 
   const loadAttorneys = useCallback(async () => {
+    let usedCache = false;
     try {
-      setLoading(true);
+      const raw = await AsyncStorage.getItem(ATTORNEYS_CACHE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (
+          parsed?.data &&
+          Array.isArray(parsed.data) &&
+          parsed.data.length > 0 &&
+          Date.now() - (parsed.ts || 0) < ATTORNEYS_CACHE_TTL_MS
+        ) {
+          setAttorneys(parsed.data);
+          setLoading(false);
+          usedCache = true;
+        }
+      }
+      if (!usedCache) {
+        setLoading(true);
+      }
+
       const records = await getAttorneys();
-      const mapped = (Array.isArray(records) ? records : []).map(record => ({
-        id: record.id,
-        name: record.full_name || record.email || 'Attorney',
-        specialty: record.specialties || 'General Practice',
-        experience: record.years_experience
-          ? `${record.years_experience} years experience`
-          : 'Experience not set',
-        rating: '4.9',
-        price: record.consultation_fee
-          ? `₱${Number(record.consultation_fee).toLocaleString(undefined, {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            })}`
-          : '₱2,500.00',
-        image: record.avatar_url || `https://i.pravatar.cc/150?u=${encodeURIComponent(record.email || record.id)}`,
-      }));
+      const mapped = mapRecords(records);
       setAttorneys(mapped);
+      await AsyncStorage.setItem(
+        ATTORNEYS_CACHE_KEY,
+        JSON.stringify({ts: Date.now(), data: mapped}),
+      );
     } catch (error) {
-      Alert.alert('Error', error?.message ?? 'Failed to load attorneys.');
-      setAttorneys([]);
+      if (!usedCache) {
+        Alert.alert('Error', error?.message ?? 'Failed to load attorneys.');
+        setAttorneys([]);
+      }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [mapRecords]);
 
   useEffect(() => {
     loadAttorneys();
@@ -112,20 +136,6 @@ export default function BookAppointment({navigation}) {
           <Text style={styles.mainTitle}>Book an Appointment</Text>
           <Text style={styles.subtitle}>Choose from our experienced attorneys</Text>
         </View>
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
-          {specialties.map(spec => (
-            <TouchableOpacity 
-              key={spec} 
-              style={[styles.filterChip, selectedSpecialty === spec && styles.activeFilterChip]}
-              onPress={() => setSelectedSpecialty(spec)}
-            >
-              <Text style={[styles.filterText, selectedSpecialty === spec && styles.activeFilterText]}>
-                {spec}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
       </View>
 
       {loading ? (
@@ -139,11 +149,15 @@ export default function BookAppointment({navigation}) {
         </View>
       ) : (
         <FlatList
-          data={filteredAttorneys}
+          data={attorneys}
           keyExtractor={item => item.id}
           renderItem={({item}) => <AttorneyCard item={item} navigation={navigation} />}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
+          initialNumToRender={8}
+          maxToRenderPerBatch={10}
+          windowSize={7}
+          removeClippedSubviews
         />
       )}
     </SafeAreaView>
@@ -186,11 +200,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 20,
   },
-  filterContainer: { marginTop: 15, marginBottom: 5 },
-  filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: '#E2E8F0', marginRight: 10 },
-  activeFilterChip: { backgroundColor: '#0F172A' },
-  filterText: { color: '#475569', fontWeight: '600', fontSize: 13 },
-  activeFilterText: { color: '#FFF' },
   emptyContainer: {
     flex: 1,
     alignItems: 'center',

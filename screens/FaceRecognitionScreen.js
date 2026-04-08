@@ -50,7 +50,10 @@ export default function FaceRecognitionScreen({ navigation, route }) {
       navigation.replace('BookingSummary', {
         serviceData: {
           type: notarialData.service_type || 'Affidavit of Loss',
-          date: notarialData.preferred_date ? new Date(notarialData.preferred_date).toLocaleDateString() : 'Immediate',
+          date:
+            createdRequest?.created_at != null
+              ? new Date(createdRequest.created_at).toLocaleDateString()
+              : 'To be confirmed',
           time: '-',
           amount: '₱4,000', // Mock amount or fetch from somewhere
         },

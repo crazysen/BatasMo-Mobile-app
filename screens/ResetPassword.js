@@ -1,42 +1,110 @@
-import React, {useMemo, useState} from 'react';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {
+  Animated,
   Alert,
+  Easing,
+  ImageBackground,
+  Platform,
+  ScrollView,
   StyleSheet,
-  View,
   Text,
   TextInput,
   TouchableOpacity,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import {updatePasswordForCurrentUser} from '../services/authService';
 
-const colors = {
-  bg: '#F8FAFC',
-  card: '#FFFFFF',
-  border: '#E2E8F0',
-  text: '#0F172A',
-  muted: '#64748B',
-  primary: '#0F172A',
-  accent: '#EAB308',
-  success: '#16A34A',
+const THEME = {
+  gold: '#d4af37',
+  textMain: '#f6f8f8',
+  textSecondary: '#a7b4b7',
+  card: 'rgba(8, 18, 26, 0.66)',
+  cardBorder: 'rgba(255, 255, 255, 0.10)',
+  success: '#4ADE80',
+};
+
+const AnimatedImageBackground = Animated.createAnimatedComponent(ImageBackground);
+
+const PressScaleButton = ({
+  children,
+  onPress,
+  style,
+  contentStyle,
+  scaleTo = 0.96,
+  activeOpacity = 0.92,
+  disabled = false,
+}) => {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  const animateTo = value => {
+    Animated.spring(scale, {
+      toValue: value,
+      useNativeDriver: true,
+      speed: 26,
+      bounciness: 8,
+    }).start();
+  };
+
+  return (
+    <TouchableOpacity
+      activeOpacity={activeOpacity}
+      onPress={onPress}
+      onPressIn={() => !disabled && animateTo(scaleTo)}
+      onPressOut={() => !disabled && animateTo(1)}
+      style={style}
+      disabled={disabled}>
+      <Animated.View style={[contentStyle, {transform: [{scale}]}]}>{children}</Animated.View>
+    </TouchableOpacity>
+  );
 };
 
 const RequirementRow = ({label, isMet}) => (
-  <View style={styles.reqRow}>
-    <View style={[styles.circle, isMet && styles.circleActive]}>
-      {isMet && <Text style={styles.checkMark}>✓</Text>}
+  <View style={styles.requirementRow}>
+    <View style={[styles.reqCircle, isMet && styles.reqCircleMet]}>
+      {isMet && <Ionicons name="checkmark" size={12} color="#050b12" />}
     </View>
-    <Text style={[styles.reqText, isMet && styles.reqTextActive]}>{label}</Text>
+    <Text style={[styles.requirementText, isMet && styles.requirementTextMet]}>{label}</Text>
   </View>
 );
 
-export default function ResetPassword({navigation}) {
+export default function ResetPassword({navigation, route}) {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [focusedField, setFocusedField] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const verifiedEmail = route?.params?.email;
+
+  const introOpacity = useRef(new Animated.Value(0)).current;
+  const introTranslateY = useRef(new Animated.Value(20)).current;
+  const bgDrift = useRef(new Animated.Value(0)).current;
+  const auraA = useRef(new Animated.Value(0)).current;
+  const auraB = useRef(new Animated.Value(0)).current;
+  const buttonGlow = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(introOpacity, {toValue: 1, duration: 700, useNativeDriver: true}),
+      Animated.timing(introTranslateY, {toValue: 0, duration: 700, useNativeDriver: true}),
+    ]).start();
+
+    const loop = (ref, duration) => {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(ref, {toValue: 1, duration, easing: Easing.inOut(Easing.sin), useNativeDriver: true}),
+          Animated.timing(ref, {toValue: 0, duration, easing: Easing.inOut(Easing.sin), useNativeDriver: true}),
+        ])
+      ).start();
+    };
+
+    loop(bgDrift, 9000);
+    loop(auraA, 2400);
+    loop(auraB, 3000);
+    loop(buttonGlow, 1300);
+  }, [auraA, auraB, bgDrift, buttonGlow, introOpacity, introTranslateY]);
 
   const checks = useMemo(() => {
     const hasMinLength = newPassword.length >= 8;
@@ -46,8 +114,7 @@ export default function ResetPassword({navigation}) {
   }, [newPassword]);
 
   const strengthScore = useMemo(() => {
-    return [checks.hasMinLength, checks.hasNumber, checks.hasSpecial].filter(Boolean)
-      .length;
+    return [checks.hasMinLength, checks.hasNumber, checks.hasSpecial].filter(Boolean).length;
   }, [checks]);
 
   const strengthLabel = useMemo(() => {
@@ -73,9 +140,8 @@ export default function ResetPassword({navigation}) {
     try {
       setIsSubmitting(true);
       await updatePasswordForCurrentUser({newPassword});
-
       Alert.alert('Success', 'Your password has been reset.', [
-        {text: 'OK', onPress: () => navigation.navigate('Login')},
+        {text: 'OK', onPress: () => navigation.reset({index: 0, routes: [{name: 'Login'}]})},
       ]);
     } catch (error) {
       Alert.alert(
@@ -90,74 +156,81 @@ export default function ResetPassword({navigation}) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.contentWrap}>
-        <TouchableOpacity style={styles.backArrow} onPress={() => navigation.canGoBack() ? navigation.goBack() : null}>
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
+      <View style={styles.backgroundLayer} pointerEvents="none">
+        <AnimatedImageBackground
+          source={require('../assets/images/bg.jpg')}
+          resizeMode="cover"
+          style={[
+            styles.backgroundImage,
+            {
+              transform: [
+                {
+                  translateY: bgDrift.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0, -18],
+                  }),
+                },
+              ],
+            },
+          ]}>
+          <View style={styles.tintDeepBlue} />
+          <View style={styles.tintDark} />
+        </AnimatedImageBackground>
+        <Animated.View style={[styles.aura, styles.auraLeft, {opacity: auraA.interpolate({inputRange: [0, 1], outputRange: [0.3, 0.6]})}]} />
+        <Animated.View style={[styles.aura, styles.auraRight, {opacity: auraB.interpolate({inputRange: [0, 1], outputRange: [0.2, 0.5]})}]} />
+      </View>
 
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>ACCOUNT SECURITY</Text>
-        </View>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <Animated.View style={[styles.topBar, {opacity: introOpacity, transform: [{translateY: introTranslateY}]}]}>
+          <PressScaleButton contentStyle={styles.backButton} onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={24} color={THEME.textMain} />
+          </PressScaleButton>
+        </Animated.View>
 
-        <Text style={styles.title}>Reset Password</Text>
-        <Text style={styles.subtitle}>Choose a strong and secure password for your account.</Text>
+        <Animated.View style={[styles.heroCard, {opacity: introOpacity}]}>
+          <Text style={styles.headerTitle}>Reset Password</Text>
+          <Text style={styles.headerSub}>Choose a strong and secure password for your account.</Text>
+          {!!verifiedEmail && <Text style={styles.verifiedEmail}>Verified: {verifiedEmail}</Text>}
+        </Animated.View>
 
-        <View style={styles.card}>
-          <Text style={styles.fieldLabel}>New Password</Text>
-          <View
-            style={[
-              styles.inputWrapper,
-              focusedField === 'new' && styles.inputWrapperFocused,
-            ]}>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter new password"
-              placeholderTextColor="#94A3B8"
-              secureTextEntry={!showNewPassword}
-              value={newPassword}
-              onChangeText={setNewPassword}
-              onFocus={() => setFocusedField('new')}
-              onBlur={() => setFocusedField(null)}
-            />
-            <TouchableOpacity onPress={() => setShowNewPassword(!showNewPassword)}>
-              <Text style={styles.passwordToggleText}>
-                {showNewPassword ? 'Hide' : 'Show'}
-              </Text>
-            </TouchableOpacity>
+        <Animated.View style={[styles.formCard, {opacity: introOpacity}]}>
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>New Password</Text>
+            <View style={styles.inputWrapper}>
+              <TextInput
+                style={styles.textInput}
+                placeholder="Enter new password"
+                placeholderTextColor={THEME.textSecondary}
+                secureTextEntry={!showNewPassword}
+                value={newPassword}
+                onChangeText={setNewPassword}
+              />
+              <TouchableOpacity onPress={() => setShowNewPassword(!showNewPassword)} style={styles.eyeButton}>
+                <Feather name={showNewPassword ? 'eye' : 'eye-off'} size={18} color={THEME.textSecondary} />
+              </TouchableOpacity>
+            </View>
           </View>
 
-          <Text style={[styles.fieldLabel, {marginTop: 18}]}>Confirm New Password</Text>
-          <View
-            style={[
-              styles.inputWrapper,
-              focusedField === 'confirm' && styles.inputWrapperFocused,
-            ]}>
-            <TextInput
-              style={styles.input}
-              placeholder="Re-enter new password"
-              placeholderTextColor="#94A3B8"
-              secureTextEntry={!showConfirmPassword}
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              onFocus={() => setFocusedField('confirm')}
-              onBlur={() => setFocusedField(null)}
-            />
-            <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
-              <Text style={styles.passwordToggleText}>
-                {showConfirmPassword ? 'Hide' : 'Show'}
-              </Text>
-            </TouchableOpacity>
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Confirm New Password</Text>
+            <View style={styles.inputWrapper}>
+              <TextInput
+                style={styles.textInput}
+                placeholder="Re-enter new password"
+                placeholderTextColor={THEME.textSecondary}
+                secureTextEntry={!showConfirmPassword}
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+              />
+              <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)} style={styles.eyeButton}>
+                <Feather name={showConfirmPassword ? 'eye' : 'eye-off'} size={18} color={THEME.textSecondary} />
+              </TouchableOpacity>
+            </View>
           </View>
 
           <View style={styles.strengthRow}>
             <Text style={styles.strengthLabel}>Password Strength</Text>
-            <Text
-              style={[
-                styles.strengthValue,
-                strengthScore === 3 && styles.strengthStrong,
-              ]}>
-              {strengthLabel}
-            </Text>
+            <Text style={[styles.strengthValue, strengthScore === 3 && styles.strengthStrong]}>{strengthLabel}</Text>
           </View>
 
           <View style={styles.progressTrack}>
@@ -166,148 +239,134 @@ export default function ResetPassword({navigation}) {
                 styles.progressFill,
                 {
                   width: `${(strengthScore / 3) * 100}%`,
-                  backgroundColor: strengthScore === 3 ? colors.success : '#EAB308',
+                  backgroundColor: strengthScore === 3 ? THEME.success : THEME.gold,
                 },
               ]}
             />
           </View>
 
           <View style={styles.requirementsContainer}>
-            <Text style={styles.reqHeader}>PASSWORD REQUIREMENTS</Text>
+            <Text style={styles.reqTitle}>PASSWORD REQUIREMENTS</Text>
             <RequirementRow label="At least 8 characters" isMet={checks.hasMinLength} />
             <RequirementRow label="Contains a number" isMet={checks.hasNumber} />
             <RequirementRow label="Contains a special character" isMet={checks.hasSpecial} />
           </View>
 
-          <TouchableOpacity
-            style={[styles.primaryButton, isSubmitting && styles.buttonDisabled]}
+          <PressScaleButton
+            style={[styles.primaryButtonWrap, isSubmitting && styles.disabledWrap]}
+            contentStyle={styles.primaryButton}
             onPress={handleUpdatePassword}
             disabled={isSubmitting}>
-            <Text style={styles.buttonText}>
-              {isSubmitting ? 'Updating...' : 'Update Password'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+            <Animated.View style={[styles.buttonGlow, {opacity: buttonGlow}]} />
+            <Text style={styles.primaryButtonText}>{isSubmitting ? 'Updating...' : 'Update Password'}</Text>
+          </PressScaleButton>
+        </Animated.View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {flex: 1, backgroundColor: colors.bg},
-  contentWrap: {paddingHorizontal: 20, paddingTop: 22, paddingBottom: 20},
-  backArrow: {alignSelf: 'flex-start', marginBottom: 14},
-  backText: {fontSize: 16, fontWeight: '700', color: colors.accent},
-  badge: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#FEF3C7',
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+  container: {flex: 1, backgroundColor: '#050b12'},
+  backgroundLayer: {...StyleSheet.absoluteFillObject, overflow: 'hidden'},
+  backgroundImage: {...StyleSheet.absoluteFillObject, left: -24, right: -24, top: -24, bottom: -24},
+  tintDeepBlue: {...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(4, 18, 44, 0.7)'},
+  tintDark: {...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(3, 9, 15, 0.3)'},
+  aura: {position: 'absolute', borderRadius: 999},
+  auraLeft: {top: 100, left: -100, width: 300, height: 300, backgroundColor: 'rgba(75, 121, 214, 0.2)'},
+  auraRight: {bottom: 50, right: -100, width: 300, height: 300, backgroundColor: 'rgba(212, 175, 55, 0.1)'},
+  scrollContent: {paddingHorizontal: 20, paddingTop: 10, paddingBottom: 40},
+  topBar: {marginBottom: 20},
+  backButton: {width: 40, height: 40, justifyContent: 'center'},
+  heroCard: {marginBottom: 25},
+  headerTitle: {color: THEME.textMain, fontSize: 34, fontWeight: '900', fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif'},
+  headerSub: {color: THEME.textSecondary, marginTop: 10, fontSize: 16, lineHeight: 24},
+  verifiedEmail: {color: THEME.gold, marginTop: 8, fontSize: 12, fontWeight: '700'},
+  formCard: {
+    backgroundColor: THEME.card,
+    borderRadius: 28,
+    padding: 24,
     borderWidth: 1,
-    borderColor: '#FDE68A',
-    marginBottom: 10,
+    borderColor: THEME.cardBorder,
   },
-  badgeText: {color: '#92400E', fontSize: 11, fontWeight: '800', letterSpacing: 0.8},
-  title: {
-    fontSize: 34,
-    fontWeight: '800',
-    color: colors.text,
-    marginBottom: 8,
-  },
-  subtitle: {fontSize: 15, color: colors.muted, marginBottom: 18, lineHeight: 21},
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: 22,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: colors.border,
-    shadowColor: '#0F172A',
-    shadowOpacity: 0.08,
-    shadowRadius: 20,
-    shadowOffset: {width: 0, height: 10},
-    elevation: 4,
-  },
-  fieldLabel: {fontWeight: '700', color: colors.text, marginBottom: 8, fontSize: 13},
+  inputContainer: {marginBottom: 20},
+  inputLabel: {color: THEME.textMain, fontSize: 14, marginBottom: 10, fontWeight: '700'},
   inputWrapper: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 16,
+    height: 56,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    height: 54,
+    paddingHorizontal: 16,
   },
-  inputWrapperFocused: {
-    borderColor: '#94A3B8',
-    backgroundColor: '#FFFFFF',
-  },
-  input: {flex: 1, color: colors.text, fontSize: 15},
-  passwordToggleText: {
-    color: colors.accent,
-    fontSize: 13,
-    fontWeight: '700',
-    marginLeft: 10,
-  },
+  textInput: {flex: 1, color: THEME.textMain, fontSize: 15},
+  eyeButton: {padding: 4},
   strengthRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 16,
+    marginTop: 4,
     marginBottom: 8,
   },
-  strengthLabel: {color: '#334155', fontSize: 12, fontWeight: '700'},
-  strengthValue: {color: '#92400E', fontSize: 12, fontWeight: '800'},
-  strengthStrong: {color: colors.success},
+  strengthLabel: {color: THEME.textSecondary, fontSize: 12, fontWeight: '700'},
+  strengthValue: {color: THEME.gold, fontSize: 12, fontWeight: '700'},
+  strengthStrong: {color: THEME.success},
   progressTrack: {
     height: 8,
-    borderRadius: 8,
-    backgroundColor: '#E2E8F0',
+    borderRadius: 999,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     overflow: 'hidden',
     marginBottom: 16,
   },
   progressFill: {
     height: '100%',
-    borderRadius: 8,
+    borderRadius: 999,
   },
-  requirementsContainer: {marginTop: 6},
-  reqHeader: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#94A3B8',
-    letterSpacing: 1,
-    marginBottom: 14,
-  },
-  reqRow: {flexDirection: 'row', alignItems: 'center', marginBottom: 10},
-  circle: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    borderColor: '#CBD5E1',
+  requirementsContainer: {marginTop: 10, marginBottom: 30},
+  reqTitle: {color: THEME.textSecondary, fontSize: 12, fontWeight: '800', letterSpacing: 1.2, marginBottom: 15},
+  requirementRow: {flexDirection: 'row', alignItems: 'center', marginBottom: 12},
+  reqCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: THEME.textSecondary,
     marginRight: 12,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  circleActive: {backgroundColor: '#DCFCE7', borderColor: '#22C55E'},
-  checkMark: {color: '#22C55E', fontSize: 12, fontWeight: 'bold'},
-  reqText: {color: '#64748B', fontSize: 14},
-  reqTextActive: {color: '#0F172A', fontWeight: '600'},
+  reqCircleMet: {
+    backgroundColor: THEME.success,
+    borderColor: THEME.success,
+  },
+  requirementText: {color: THEME.textSecondary, fontSize: 14, fontWeight: '500'},
+  requirementTextMet: {color: THEME.textMain},
   primaryButton: {
-    backgroundColor: colors.primary,
-    paddingVertical: 16,
-    borderRadius: 14,
-    marginTop: 18,
-    shadowColor: colors.primary,
-    shadowOpacity: 0.22,
-    shadowRadius: 8,
-    shadowOffset: {width: 0, height: 4},
-    elevation: 3,
+    backgroundColor: '#0c1622',
+    height: 58,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    overflow: 'hidden',
   },
-  buttonDisabled: {
-    opacity: 0.7,
+  primaryButtonWrap: {
+    shadowColor: '#000',
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+    elevation: 8,
   },
-  buttonText: {color: '#FFFFFF', textAlign: 'center', fontWeight: '800', fontSize: 16},
+  buttonGlow: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+  },
+  primaryButtonText: {color: '#fff', fontWeight: '800', fontSize: 16},
+  disabledWrap: {opacity: 0.7},
 });
-

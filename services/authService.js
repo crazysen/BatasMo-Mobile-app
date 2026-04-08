@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { clearCachedProfile } from './profileCache';
 
 export async function signUpWithEmail({
   email,
@@ -154,6 +155,7 @@ export async function signInWithEmail({ email, password }) {
 }
 
 export async function signOutCurrentUser() {
+  await clearCachedProfile();
   const { error } = await supabase.auth.signOut();
   if (error) {
     // throw new Error(error.message);

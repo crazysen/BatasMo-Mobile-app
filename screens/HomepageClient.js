@@ -1,4 +1,5 @@
 import React, {useCallback, useEffect, useState} from 'react';
+import {useFocusEffect} from '@react-navigation/native';
 import {
   Alert,
   ActivityIndicator,
@@ -10,9 +11,12 @@ import {
 } from 'react-native';
 import {useUserProfile} from '../context/UserProfileContext';
 import {getMyAppointments} from '../services/appointmentService';
+import {getMyProfile} from '../services/profileService';
+import {registerClientPushNotifications} from '../services/pushNotificationService';
+import {getGreetingName} from '../utils/userDisplayName';
 
 const HomepageClient = ({navigation}) => {
-  const {profile} = useUserProfile();
+  const {profile, updateProfile} = useUserProfile();
   const [appointments, setAppointments] = useState([]);
   const [loadingAppointments, setLoadingAppointments] = useState(true);
 
@@ -33,6 +37,44 @@ const HomepageClient = ({navigation}) => {
   useEffect(() => {
     loadAppointments();
   }, [loadAppointments]);
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        try {
+          const data = await getMyProfile();
+          if (cancelled || !data) return;
+          updateProfile({
+            name: data.full_name || '',
+            email: data.email || '',
+            phone: data.phone || '',
+            address: data.address || '',
+            age: data.age,
+            guardian_name: data.guardian_name,
+            guardian_contact: data.guardian_contact,
+            role:
+              String(data.role || '').toLowerCase() === 'attorney'
+                ? 'Attorney'
+                : 'Client',
+          });
+        } catch {
+          // Session missing or network — keep cache / context values
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [updateProfile]),
+  );
+
+  useEffect(() => {
+    const role = String(profile?.role || '').toLowerCase();
+    if (role !== 'client') {
+      return;
+    }
+    registerClientPushNotifications().catch(() => {});
+  }, [profile?.role]);
 
   const handleMenu = () => navigation.navigate('ClientMenu');
   const handleNotifications = () => navigation.navigate('ClientNotification');
@@ -112,13 +154,15 @@ const HomepageClient = ({navigation}) => {
     };
   };
 
-  const displayName = profile?.name?.trim() || 'Client';
-  const initials = displayName
+  const greetingName = getGreetingName(profile);
+  const initialsSource = greetingName || profile?.email?.split('@')[0] || '?';
+  const initials = initialsSource
     .split(' ')
     .filter(Boolean)
     .slice(0, 2)
     .map(part => part[0]?.toUpperCase())
-    .join('') || 'AJ';
+    .join('')
+    .slice(0, 2) || '?';
 
   return (
     <View style={styles.container}>
@@ -145,7 +189,9 @@ const HomepageClient = ({navigation}) => {
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Welcome Back, {displayName}</Text>
+          <Text style={styles.headerTitle}>
+            {greetingName ? `Welcome Back, ${greetingName}` : 'Welcome Back'}
+          </Text>
           <Text style={styles.headerSubtitle}>
             Here's what's happening with your legal matters today.
           </Text>

@@ -93,13 +93,7 @@ export default function CreateAccount({ navigation }) {
         'Account Created',
         'If email confirmation is enabled, please verify your email before logging in.',
       );
-      // navigation.navigate('VerifyAccount', {email: email.trim(), role});
-      // Since email verification might be off, let's just go straight to login or home
-      if (role === 'Client') {
-        navigation.navigate('HomepageClient');
-      } else {
-        navigation.navigate('AttyLandingPage');
-      }
+      navigation.navigate('VerifyAccount', {email: email.trim(), role});
     } catch (error) {
       Alert.alert('Sign Up Failed', error?.message ?? 'Unable to create account.');
     } finally {

@@ -56,7 +56,6 @@ export async function createNotarialRequest(payload) {
       service_type: payload.service_type,
       details: payload.details || null,
       document_url: documentUrl,
-      preferred_date: payload.preferred_date || null,
       status: 'pending',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),

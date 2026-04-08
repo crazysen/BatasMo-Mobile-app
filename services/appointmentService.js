@@ -1,5 +1,18 @@
 import { supabase } from './supabaseClient';
 
+async function notifyClientReschedulePush(appointmentId) {
+  try {
+    const { error } = await supabase.functions.invoke('send-reschedule-push', {
+      body: { appointment_id: appointmentId },
+    });
+    if (error) {
+      console.warn('send-reschedule-push:', error.message);
+    }
+  } catch (e) {
+    console.warn('send-reschedule-push:', e?.message ?? e);
+  }
+}
+
 const APPOINTMENTS_CACHE_TTL_MS = 15000;
 let appointmentsCache = {
   data: null,
@@ -10,6 +23,83 @@ function invalidateAppointmentsCache() {
   appointmentsCache = {
     data: null,
     updatedAt: 0,
+  };
+}
+
+/** Original booking notes without any appended "Reschedule reason:" blocks. */
+function stripRescheduleBlocks(notes) {
+  if (!notes || typeof notes !== 'string') {
+    return '';
+  }
+  const parts = notes.split('\n\nReschedule reason:');
+  return parts[0].trim();
+}
+
+/**
+ * Replaces previous reschedule reasons with one latest block (avoids duplicate lines in DB).
+ */
+export function mergeRescheduleNotes(existingNotes, reason) {
+  const base = stripRescheduleBlocks(existingNotes);
+  const r = String(reason || '').trim();
+  if (!r) {
+    return base || null;
+  }
+  const block = `Reschedule reason: ${r}`;
+  return base ? `${base}\n\n${block}` : block;
+}
+
+/** Collapses legacy duplicate "Reschedule reason:" blocks to base + latest only. */
+export function formatAppointmentNotesForDisplay(notes) {
+  if (!notes?.trim()) {
+    return '';
+  }
+  const parts = notes.split('\n\nReschedule reason:').map(s => s.trim()).filter(Boolean);
+  if (parts.length <= 1) {
+    return notes.trim();
+  }
+  const base = parts[0];
+  const latest = parts[parts.length - 1];
+  return base ? `${base}\n\nReschedule reason: ${latest}` : `Reschedule reason: ${latest}`;
+}
+
+export function getLatestRescheduleReason(notes) {
+  if (!notes?.includes('Reschedule reason:')) {
+    return '';
+  }
+  const parts = notes.split('\n\nReschedule reason:');
+  return parts.length > 1 ? parts[parts.length - 1].trim() : '';
+}
+
+export function formatScheduledAtDisplay(isoDateTime) {
+  if (!isoDateTime) {
+    return {date: '—', time: '—'};
+  }
+  const rawValue = String(isoDateTime).trim();
+  const hasTimezoneInfo = /([zZ]|[+-]\d{2}:?\d{2})$/.test(rawValue);
+  let value;
+  if (hasTimezoneInfo) {
+    const normalizedValue = rawValue.replace(' ', 'T').replace(/\+00$/, 'Z');
+    value = new Date(normalizedValue);
+  } else {
+    const localMatch = rawValue.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+    if (localMatch) {
+      value = new Date(
+        Number(localMatch[1]),
+        Number(localMatch[2]) - 1,
+        Number(localMatch[3]),
+        Number(localMatch[4]),
+        Number(localMatch[5]),
+      );
+    } else {
+      value = new Date(rawValue);
+    }
+  }
+  if (!value || Number.isNaN(value.getTime())) {
+    return {date: '—', time: '—'};
+  }
+  return {
+    date: value.toLocaleDateString(),
+    time: value.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}),
   };
 }
 
@@ -131,9 +221,7 @@ export async function rescheduleAppointment(appointmentId, scheduledAt, reason) 
     .eq('id', appointmentId)
     .single();
 
-  const newNotes = existingAppt?.notes 
-    ? `${existingAppt.notes}\n\nReschedule reason: ${reason}` 
-    : `Reschedule reason: ${reason}`;
+  const newNotes = mergeRescheduleNotes(existingAppt?.notes ?? '', reason);
 
   const { error } = await supabase
     .from('appointments')
@@ -148,13 +236,14 @@ export async function rescheduleAppointment(appointmentId, scheduledAt, reason) 
   if (error) throw new Error(error.message);
 
   invalidateAppointmentsCache();
+  await notifyClientReschedulePush(appointmentId);
   return { success: true };
 }
 
 export async function getAvailability(attorneyId, date) {
   let query = supabase
     .from('availability_slots')
-    .select('*')
+    .select('date, time')
     .eq('attorney_id', attorneyId)
     .eq('is_booked', false)
     .order('time', { ascending: true });

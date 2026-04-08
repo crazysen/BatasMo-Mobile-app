@@ -1,4 +1,5 @@
-import React, {createContext, useContext, useMemo, useState, useCallback} from 'react';
+import React, {createContext, useContext, useMemo, useState, useCallback, useEffect} from 'react';
+import {loadCachedProfile, saveCachedProfile} from '../services/profileCache';
 
 const UserProfileContext = createContext(null);
 
@@ -16,11 +17,33 @@ const initialProfile = {
 export const UserProfileProvider = ({children}) => {
   const [profile, setProfile] = useState(initialProfile);
 
-  const updateProfile = useCallback((updates) => {
-    setProfile(previous => ({
-      ...previous,
-      ...updates,
-    }));
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const cached = await loadCachedProfile();
+      if (cancelled || !cached) return;
+      setProfile(prev => ({
+        ...prev,
+        ...cached,
+        name: cached.name ?? prev.name,
+        email: cached.email ?? prev.email,
+        role: cached.role ?? prev.role,
+      }));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const updateProfile = useCallback(updates => {
+    setProfile(previous => {
+      const next = {
+        ...previous,
+        ...updates,
+      };
+      saveCachedProfile(next);
+      return next;
+    });
   }, []);
 
   const value = useMemo(

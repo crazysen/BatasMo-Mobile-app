@@ -13,11 +13,12 @@ import {useFocusEffect} from '@react-navigation/native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {useUserProfile} from '../context/UserProfileContext';
 import {getMyAppointments} from '../services/appointmentService';
+import {getMyProfile} from '../services/profileService';
+import {getGreetingName} from '../utils/userDisplayName';
 
 function resolveScheduleValue(item) {
   return (
     item?.scheduled_at ||
-    item?.preferred_date ||
     item?.updated_at ||
     item?.created_at ||
     null
@@ -27,7 +28,7 @@ function resolveScheduleValue(item) {
 const AttorneyDashboard = ({navigation}) => {
   const {width} = useWindowDimensions();
   const isSmallScreen = width < 380;
-  const {profile} = useUserProfile();
+  const {profile, updateProfile} = useUserProfile();
 
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -49,6 +50,36 @@ const AttorneyDashboard = ({navigation}) => {
     useCallback(() => {
       loadDashboard();
     }, [loadDashboard]),
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        try {
+          const data = await getMyProfile();
+          if (cancelled || !data) return;
+          updateProfile({
+            name: data.full_name || '',
+            email: data.email || '',
+            phone: data.phone || '',
+            address: data.address || '',
+            age: data.age,
+            guardian_name: data.guardian_name,
+            guardian_contact: data.guardian_contact,
+            role:
+              String(data.role || '').toLowerCase() === 'attorney'
+                ? 'Attorney'
+                : 'Client',
+          });
+        } catch {
+          // ignore
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [updateProfile]),
   );
 
   const pendingCount = appointments.filter(
@@ -99,7 +130,7 @@ const AttorneyDashboard = ({navigation}) => {
     };
   });
 
-  const displayName = profile?.name?.trim() || profile?.full_name?.trim() || 'Attorney';
+  const greetingName = getGreetingName(profile);
 
   const MetricBar = ({label, percentage, color, value}) => (
     <View style={styles.metricContainer}>
@@ -147,7 +178,9 @@ const AttorneyDashboard = ({navigation}) => {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, isSmallScreen && styles.scrollContentSmall]}>
         <Text style={[styles.welcomeText, isSmallScreen && styles.welcomeTextSmall]} numberOfLines={2}>
-          Welcome back, Atty. {displayName}
+          {greetingName
+            ? `Welcome back, Atty. ${greetingName}`
+            : 'Welcome back, Attorney'}
         </Text>
         <Text style={styles.subtitle}>Here&apos;s what&apos;s happening with your practice today.</Text>
 

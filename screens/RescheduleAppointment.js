@@ -8,35 +8,114 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
+  Platform,
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {rescheduleAppointment} from '../services/appointmentService';
 
+const TIME_SLOTS = ['9:00 AM', '10:00 AM', '11:00 AM', '1:00 PM', '2:00 PM'];
+
+function parseSlotToParts(slotStr) {
+  const [time, modifier] = slotStr.split(' ');
+  const [rawHour, rawMinute] = time.split(':');
+  let hour = Number(rawHour);
+  if (modifier === 'PM' && hour < 12) hour += 12;
+  if (modifier === 'AM' && hour === 12) hour = 0;
+  return {hour, minute: Number(rawMinute)};
+}
+
+function findMatchingSlot(date, slots) {
+  const h = date.getHours();
+  const m = date.getMinutes();
+  for (const slot of slots) {
+    const {hour, minute} = parseSlotToParts(slot);
+    if (hour === h && minute === m) {
+      return slot;
+    }
+  }
+  return null;
+}
+
+function parseInitialSchedule(appointment) {
+  const raw = appointment?.scheduled_at;
+  if (raw) {
+    const d = new Date(String(raw).trim());
+    if (!Number.isNaN(d.getTime())) {
+      return d;
+    }
+  }
+  const d = new Date();
+  d.setHours(10, 0, 0, 0);
+  return d;
+}
+
 export default function RescheduleAppointment({navigation, route}) {
-  const [selectedDate, setSelectedDate] = useState('2026-02-24');
-  const [selectedTime, setSelectedTime] = useState('11:00 AM');
-  const [reason, setReason] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const timeSlots = ['9:00 AM', '10:00 AM', '11:00 AM', '1:00 PM', '2:00 PM'];
   const appointment = route?.params?.appointment || {name: 'Client', date: 'N/A', time: 'N/A'};
   const returnRoute = route?.params?.returnRoute || 'AttyMyAppointments';
+
+  const [scheduleAt, setScheduleAt] = useState(() => {
+    const initial = parseInitialSchedule(appointment);
+    const match = findMatchingSlot(initial, TIME_SLOTS);
+    if (match) {
+      return initial;
+    }
+    const d = new Date(initial);
+    const {hour, minute} = parseSlotToParts(TIME_SLOTS[0]);
+    d.setHours(hour, minute, 0, 0);
+    return d;
+  });
+
+  const [reason, setReason] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+
+  const matchingSlot = useMemo(
+    () => findMatchingSlot(scheduleAt, TIME_SLOTS),
+    [scheduleAt],
+  );
 
   const appointmentTitle = useMemo(
     () => `With ${appointment.name} • ${appointment.date}, ${appointment.time}`,
     [appointment.date, appointment.name, appointment.time],
   );
 
-  const buildScheduleDateTime = () => {
-    const [time, modifier] = selectedTime.split(' ');
-    const [rawHour, rawMinute] = time.split(':');
-    let hour = Number(rawHour);
-    if (modifier === 'PM' && hour < 12) hour += 12;
-    if (modifier === 'AM' && hour === 12) hour = 0;
-    const minute = Number(rawMinute);
+  const dateLabel = useMemo(
+    () =>
+      scheduleAt.toLocaleDateString(undefined, {
+        weekday: 'short',
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      }),
+    [scheduleAt],
+  );
 
-    const formattedHour = String(hour).padStart(2, '0');
-    const formattedMinute = String(minute).padStart(2, '0');
-    return `${selectedDate}T${formattedHour}:${formattedMinute}:00`;
+  const buildScheduleIsoUtc = () => scheduleAt.toISOString();
+
+  const applyTimeSlot = slotStr => {
+    const {hour, minute} = parseSlotToParts(slotStr);
+    setScheduleAt(prev => {
+      const next = new Date(prev);
+      next.setHours(hour, minute, 0, 0);
+      return next;
+    });
+  };
+
+  const onDateChange = (event, date) => {
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false);
+    }
+    if (event?.type === 'dismissed' && Platform.OS === 'android') {
+      return;
+    }
+    if (date) {
+      setScheduleAt(prev => {
+        const next = new Date(prev);
+        next.setFullYear(date.getFullYear(), date.getMonth(), date.getDate());
+        return next;
+      });
+    }
   };
 
   const handleConfirm = async () => {
@@ -45,17 +124,29 @@ export default function RescheduleAppointment({navigation, route}) {
       return;
     }
 
-    if (!selectedDate.trim()) {
-      Alert.alert('Error', 'Please set a new date.');
-      return;
-    }
-
     try {
       setSubmitting(true);
-      const scheduledAt = buildScheduleDateTime();
+      const scheduledAt = buildScheduleIsoUtc();
       await rescheduleAppointment(appointment.id, scheduledAt, reason.trim());
-      Alert.alert('Success', 'Appointment has been rescheduled.');
-      navigation.navigate(returnRoute);
+      const whenLabel = `${scheduleAt.toLocaleDateString(undefined, {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      })}\n${scheduleAt.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}`;
+      const reasonLine = reason.trim()
+        ? `\n\nMessage to client:\n${reason.trim()}`
+        : '';
+      Alert.alert('Reschedule successful', `The new schedule is:\n\n${whenLabel}${reasonLine}`, [
+        {
+          text: 'Go to dashboard',
+          onPress: () =>
+            navigation.reset({
+              index: 0,
+              routes: [{name: 'AttyLandingPage'}],
+            }),
+        },
+      ]);
     } catch (error) {
       Alert.alert('Error', error?.message ?? 'Unable to reschedule appointment.');
     } finally {
@@ -64,7 +155,9 @@ export default function RescheduleAppointment({navigation, route}) {
   };
 
   const handleCancel = () => {
-    navigation.canGoBack() ? navigation.goBack() : null;
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    }
   };
 
   return (
@@ -81,34 +174,51 @@ export default function RescheduleAppointment({navigation, route}) {
           </View>
 
           <Text style={styles.sectionLabel}>Select New Date</Text>
-          <View style={styles.datePicker}>
-            <TextInput
-              value={selectedDate}
-              onChangeText={setSelectedDate}
-              style={styles.dateInput}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor="#94A3B8"
-            />
+          <TouchableOpacity
+            style={styles.datePicker}
+            onPress={() => setShowDatePicker(true)}
+            activeOpacity={0.85}>
+            <Text style={styles.dateText}>{dateLabel}</Text>
             <Text style={styles.calendarIcon}>📅</Text>
-          </View>
+          </TouchableOpacity>
+
+          {showDatePicker && (
+            <>
+              <DateTimePicker
+                value={scheduleAt}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={onDateChange}
+              />
+              {Platform.OS === 'ios' && (
+                <TouchableOpacity
+                  style={styles.dateDoneBtn}
+                  onPress={() => setShowDatePicker(false)}>
+                  <Text style={styles.dateDoneText}>Done</Text>
+                </TouchableOpacity>
+              )}
+            </>
+          )}
 
           <Text style={styles.sectionLabel}>Select New Time Slot</Text>
+          <Text style={styles.timeHint}>
+            {scheduleAt.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
+            {!matchingSlot ? ' (custom from current appointment)' : ''}
+          </Text>
           <View style={styles.timeGrid}>
-            {timeSlots.map((time) => (
+            {TIME_SLOTS.map(time => (
               <TouchableOpacity
                 key={time}
-                onPress={() => setSelectedTime(time)}
+                onPress={() => applyTimeSlot(time)}
                 style={[
                   styles.timeChip,
-                  selectedTime === time && styles.timeChipSelected,
-                ]}
-              >
+                  matchingSlot === time && styles.timeChipSelected,
+                ]}>
                 <Text
                   style={[
                     styles.timeChipText,
-                    selectedTime === time && styles.timeChipTextSelected,
-                  ]}
-                >
+                    matchingSlot === time && styles.timeChipTextSelected,
+                  ]}>
                   {time}
                 </Text>
               </TouchableOpacity>
@@ -151,7 +261,7 @@ export default function RescheduleAppointment({navigation, route}) {
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  overlay: {flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end'},
   modalContainer: {
     backgroundColor: 'white',
     borderTopLeftRadius: 24,
@@ -184,13 +294,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 24,
   },
-  infoIcon: { marginRight: 8, color: '#64748B' },
-  infoBannerText: { color: '#64748B', fontSize: 14 },
+  infoIcon: {marginRight: 8, color: '#64748B'},
+  infoBannerText: {color: '#64748B', fontSize: 14, flex: 1},
   sectionLabel: {
     fontSize: 14,
     fontWeight: '700',
     color: '#334155',
     marginBottom: 12,
+  },
+  timeHint: {
+    fontSize: 13,
+    color: '#64748B',
+    marginBottom: 10,
   },
   datePicker: {
     flexDirection: 'row',
@@ -203,15 +318,16 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     backgroundColor: '#F8FAFC',
   },
-  dateText: { fontSize: 16, color: '#0F172A' },
-  dateInput: {
-    flex: 1,
-    fontSize: 16,
-    color: '#0F172A',
-    paddingVertical: 0,
+  dateText: {fontSize: 16, color: '#0F172A', flex: 1},
+  dateDoneBtn: {
+    alignSelf: 'flex-end',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 8,
   },
-  calendarIcon: { fontSize: 16 },
-  timeGrid: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 24 },
+  dateDoneText: {fontSize: 16, fontWeight: '700', color: '#1E293B'},
+  calendarIcon: {fontSize: 16},
+  timeGrid: {flexDirection: 'row', flexWrap: 'wrap', marginBottom: 24},
   timeChip: {
     width: '31%',
     paddingVertical: 14,
@@ -222,9 +338,9 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     marginRight: '2%',
   },
-  timeChipSelected: { backgroundColor: '#1E293B', borderColor: '#1E293B' },
-  timeChipText: { color: '#1E293B', fontWeight: '500' },
-  timeChipTextSelected: { color: 'white' },
+  timeChipSelected: {backgroundColor: '#1E293B', borderColor: '#1E293B'},
+  timeChipText: {color: '#1E293B', fontWeight: '500'},
+  timeChipTextSelected: {color: 'white'},
   textArea: {
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
@@ -243,8 +359,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 24,
   },
-  policyIcon: { color: '#2563EB', fontWeight: 'bold', marginRight: 10 },
-  policyText: { color: '#2563EB', fontSize: 13, flex: 1, fontWeight: '600', lineHeight: 18 },
+  policyIcon: {color: '#2563EB', fontWeight: 'bold', marginRight: 10},
+  policyText: {color: '#2563EB', fontSize: 13, flex: 1, fontWeight: '600', lineHeight: 18},
   confirmButton: {
     backgroundColor: '#EAB308',
     paddingVertical: 18,
@@ -252,15 +368,15 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     shadowColor: '#EAB308',
     shadowOpacity: 0.3,
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: {width: 0, height: 4},
     shadowRadius: 6,
   },
-  confirmButtonText: { color: '#0F172A', textAlign: 'center', fontWeight: 'bold', fontSize: 16 },
+  confirmButtonText: {color: '#0F172A', textAlign: 'center', fontWeight: 'bold', fontSize: 16},
   cancelButton: {
     paddingVertical: 18,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
-  cancelButtonText: { color: '#64748B', textAlign: 'center', fontWeight: '600' },
+  cancelButtonText: {color: '#64748B', textAlign: 'center', fontWeight: '600'},
 });

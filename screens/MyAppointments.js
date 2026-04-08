@@ -9,12 +9,14 @@ import {
   View,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {getMyAppointments} from '../services/appointmentService';
+import {
+  formatAppointmentNotesForDisplay,
+  getMyAppointments,
+} from '../services/appointmentService';
 
 function resolveScheduleValue(item) {
   return (
     item?.scheduled_at ||
-    item?.preferred_date ||
     item?.updated_at ||
     item?.created_at ||
     null
@@ -133,7 +135,10 @@ export default function MyAppointments({navigation}) {
 
                 <Text style={styles.detailText}>📅 {date}</Text>
                 <Text style={styles.detailText}>🕒 {time}</Text>
-                <Text style={styles.detailText}>📝 {item.notes || 'No additional notes'}</Text>
+                <Text style={styles.detailText}>
+                  📝{' '}
+                  {formatAppointmentNotesForDisplay(item.notes) || 'No additional notes'}
+                </Text>
 
                 {canChat ? (
                   <TouchableOpacity

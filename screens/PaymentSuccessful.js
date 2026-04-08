@@ -10,31 +10,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 export default function PaymentSuccessful({navigation, route}) {
   const amount = route?.params?.amount || '₱2,500.00';
   const transactionId = route?.params?.transactionId || 'BTMS-UNKNOWN';
-  const paymentContext = route?.params?.paymentContext || null;
-  const serviceData = route?.params?.serviceData || null;
-  const isConsultationPayment = paymentContext?.sourceType === 'appointment' || paymentContext?.sourceType === 'appointment_booking';
 
   const handleBackToDashboard = () => {
-    if (isConsultationPayment) {
-      navigation.reset({
-        index: 1,
-        routes: [{name: 'HomepageClient'}, {name: 'MyAppointments'}],
-      });
-      return;
-    }
-
     navigation.reset({
       index: 0,
       routes: [{name: 'HomepageClient'}],
-    });
-  };
-
-  const handleViewTranscript = () => {
-    navigation.navigate('PaymentTranscript', {
-      transactionId,
-      amount,
-      paymentContext,
-      serviceData,
     });
   };
 
@@ -62,14 +42,8 @@ export default function PaymentSuccessful({navigation, route}) {
           <Text style={styles.boldText}> Documents vault</Text>.
         </Text>
 
-        <TouchableOpacity style={styles.transcriptButton} onPress={handleViewTranscript}>
-          <Text style={styles.transcriptButtonText}>View Transcript</Text>
-        </TouchableOpacity>
-
         <TouchableOpacity style={styles.dashboardButton} onPress={handleBackToDashboard}>
-          <Text style={styles.buttonText}>
-            {isConsultationPayment ? 'Go to My Appointments' : 'Back to Dashboard'}
-          </Text>
+          <Text style={styles.buttonText}>Go back to dashboard</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -161,26 +135,12 @@ const styles = StyleSheet.create({
     color: '#64748B',
     textAlign: 'center',
     lineHeight: 22,
-    marginBottom: 40,
+    marginBottom: 28,
     paddingHorizontal: 10,
   },
   boldText: {
     fontWeight: 'bold',
     color: '#475569',
-  },
-  transcriptButton: {
-    borderWidth: 1,
-    borderColor: '#1E293B',
-    paddingVertical: 16,
-    borderRadius: 16,
-    width: '100%',
-    marginBottom: 12,
-  },
-  transcriptButtonText: {
-    color: '#1E293B',
-    textAlign: 'center',
-    fontWeight: '700',
-    fontSize: 16,
   },
   dashboardButton: {
     backgroundColor: '#D9B041',

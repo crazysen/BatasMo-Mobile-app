@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useCallback} from 'react';
+import React, {useState, useEffect, useCallback, useRef} from 'react';
 import {
   Alert,
   StyleSheet,
@@ -9,6 +9,7 @@ import {
   TextInput,
   ActivityIndicator,
   Platform,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -21,6 +22,7 @@ export default function BookNow({navigation, route}) {
   
   const [availableSlots, setAvailableSlots] = useState([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
+  const slotsRequestId = useRef(0);
 
   const [reason, setReason] = useState('');
   const attorney = route?.params?.attorney || { name: 'Dr. Sarah Johnson', specialty: 'Corporate Law', price: '₱2,500.00' };
@@ -29,38 +31,46 @@ export default function BookNow({navigation, route}) {
 
   const fetchAvailableSlots = useCallback(async () => {
     if (!attorney?.id) return;
+    const reqId = ++slotsRequestId.current;
     try {
       setLoadingSlots(true);
       setSelectedTime(null);
       const slots = await getAvailability(attorney.id, localDateStr);
-      
+      if (reqId !== slotsRequestId.current) {
+        return;
+      }
+
       const now = new Date();
-      
+
       const availableTimeStrings = slots.map(s => s.time).filter(timeStr => {
         const [time, modifier] = String(timeStr).split(' ');
         const [rawHour, rawMinute] = time.split(':');
         let hour = Number(rawHour);
         if (modifier === 'PM' && hour < 12) hour += 12;
         if (modifier === 'AM' && hour === 12) hour = 0;
-        
+
         const slotDate = new Date(
           selectedDate.getFullYear(),
           selectedDate.getMonth(),
           selectedDate.getDate(),
           hour,
           Number(rawMinute),
-          0
+          0,
         );
         return slotDate > now;
       });
 
       setAvailableSlots(availableTimeStrings);
     } catch (error) {
-      Alert.alert('Error', 'Failed to load available slots.');
+      if (reqId === slotsRequestId.current) {
+        Alert.alert('Error', 'Failed to load available slots.');
+      }
     } finally {
-      setLoadingSlots(false);
+      if (reqId === slotsRequestId.current) {
+        setLoadingSlots(false);
+      }
     }
-  }, [attorney?.id, localDateStr]);
+  }, [attorney?.id, localDateStr, selectedDate]);
 
   useEffect(() => {
     fetchAvailableSlots();
@@ -122,8 +132,13 @@ export default function BookNow({navigation, route}) {
     navigation.canGoBack() ? navigation.goBack() : null;
   };
 
-  const onChangeDate = (event, date) => {
-    if (Platform.OS === 'android') setShowPicker(false);
+  const onChangeDateAndroid = (event, date) => {
+    if (Platform.OS === 'android') {
+      setShowPicker(false);
+      if (event?.type === 'dismissed') {
+        return;
+      }
+    }
     if (date) {
       setSelectedDate(date);
     }
@@ -161,26 +176,66 @@ export default function BookNow({navigation, route}) {
             <Text style={styles.calendarIcon}>📅</Text>
           </TouchableOpacity>
 
-          {(showPicker || Platform.OS === 'ios') && (
-            <DateTimePicker
-              value={selectedDate}
-              mode="date"
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              onChange={onChangeDate}
-              minimumDate={new Date()}
-            />
-          )}
-
-          {Platform.OS === 'ios' && showPicker && (
-            <TouchableOpacity style={styles.iosConfirm} onPress={() => setShowPicker(false)}>
-              <Text style={styles.iosConfirmText}>Confirm Date</Text>
-            </TouchableOpacity>
+          {Platform.OS === 'ios' ? (
+            <Modal
+              visible={showPicker}
+              animationType="slide"
+              transparent
+              onRequestClose={() => setShowPicker(false)}>
+              <View style={styles.dateModalRoot}>
+                <TouchableOpacity
+                  style={styles.dateModalBackdrop}
+                  activeOpacity={1}
+                  onPress={() => setShowPicker(false)}
+                />
+                <View style={styles.dateModalSheet}>
+                  <View style={styles.dateModalHeader}>
+                    <TouchableOpacity
+                      onPress={() => setShowPicker(false)}
+                      hitSlop={{top: 12, bottom: 12, left: 12, right: 12}}>
+                      <Text style={styles.dateModalCancel}>Cancel</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.dateModalTitle}>Select date</Text>
+                    <TouchableOpacity
+                      onPress={() => setShowPicker(false)}
+                      hitSlop={{top: 12, bottom: 12, left: 12, right: 12}}>
+                      <Text style={styles.dateModalDone}>Done</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <DateTimePicker
+                    value={selectedDate}
+                    mode="date"
+                    display="inline"
+                    onChange={(_, date) => {
+                      if (date) {
+                        setSelectedDate(date);
+                      }
+                    }}
+                    minimumDate={new Date()}
+                    themeVariant="light"
+                  />
+                </View>
+              </View>
+            </Modal>
+          ) : (
+            showPicker && (
+              <DateTimePicker
+                value={selectedDate}
+                mode="date"
+                display="default"
+                onChange={onChangeDateAndroid}
+                minimumDate={new Date()}
+              />
+            )
           )}
 
           <Text style={styles.inputLabel}>🕒 Select Available Slot</Text>
           
           {loadingSlots ? (
-            <ActivityIndicator size="small" color="#0F172A" style={{ marginBottom: 20 }} />
+            <View style={{marginBottom: 20}}>
+              <ActivityIndicator size="small" color="#0F172A" />
+              <Text style={styles.loadingSlotsHint}>Loading available times…</Text>
+            </View>
           ) : availableSlots.length === 0 ? (
             <Text style={styles.noSlotsText}>No availability for this date.</Text>
           ) : (
@@ -222,7 +277,13 @@ export default function BookNow({navigation, route}) {
             </Text>
           </View>
 
-          <TouchableOpacity style={[styles.submitButton, (!selectedTime || !reason) && styles.submitDisabled]} onPress={handleSubmit} disabled={!selectedTime || !reason}>
+          <TouchableOpacity
+            style={[
+              styles.submitButton,
+              (loadingSlots || !selectedTime || !reason.trim()) && styles.submitDisabled,
+            ]}
+            onPress={handleSubmit}
+            disabled={loadingSlots || !selectedTime || !reason.trim()}>
             <Text style={styles.submitButtonText}>Proceed to Payment</Text>
           </TouchableOpacity>
 
@@ -276,9 +337,40 @@ const styles = StyleSheet.create({
   },
   dateText: { fontSize: 15, color: '#1e3a8a', fontWeight: '500' },
   calendarIcon: { fontSize: 16, color: '#64748B' },
-  iosConfirm: { alignSelf: 'flex-end', padding: 10, marginBottom: 10 },
-  iosConfirmText: { color: '#2563eb', fontWeight: 'bold' },
+  dateModalRoot: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  dateModalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+  },
+  dateModalSheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingBottom: 24,
+    maxHeight: '85%',
+  },
+  dateModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E2E8F0',
+  },
+  dateModalTitle: {fontSize: 16, fontWeight: '600', color: '#0F172A'},
+  dateModalCancel: {fontSize: 16, color: '#64748B'},
+  dateModalDone: {fontSize: 16, fontWeight: '700', color: '#2563EB'},
   
+  loadingSlotsHint: {
+    marginTop: 8,
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+  },
   noSlotsText: { color: '#EF4444', marginBottom: 20, fontStyle: 'italic', fontSize: 13 },
   
   timeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 24 },

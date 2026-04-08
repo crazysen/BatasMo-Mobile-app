@@ -17,7 +17,7 @@ const RequestSuccessScreen = ({ navigation, route }) => {
   const title = route?.params?.title || 'Notarial Request';
   const user = route?.params?.user || 'Client';
   const caseId = route?.params?.caseId || 'N/A';
-  const preferredDate = route?.params?.preferredDate || 'To be scheduled';
+  const submittedAt = route?.params?.submittedAt || '—';
   
   return (
     <SafeAreaView style={styles.container}>
@@ -55,9 +55,9 @@ const RequestSuccessScreen = ({ navigation, route }) => {
               <Calendar size={18} color="#7c3aed" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.label}>NEXT STEP</Text>
+              <Text style={styles.label}>SUBMITTED</Text>
               <Text style={styles.value}>
-                Proceed with the scheduled consultation on <Text style={styles.blueValue}>{preferredDate}</Text>.
+                Request received on <Text style={styles.blueValue}>{submittedAt}</Text>. Coordinate with the client for notarization.
               </Text>
             </View>
           </View>

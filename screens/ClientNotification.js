@@ -9,8 +9,13 @@ import {
   View,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {getMyAppointments} from '../services/appointmentService';
+import {
+  formatScheduledAtDisplay,
+  getLatestRescheduleReason,
+  getMyAppointments,
+} from '../services/appointmentService';
 import {getNotarialRequests} from '../services/notarialService';
+import {supabase} from '../services/supabaseClient';
 
 function getRelativeTime(value) {
   const now = Date.now();
@@ -45,7 +50,7 @@ export default function ClientNotification({navigation}) {
     try {
       setLoading(true);
       const [appointmentRows, requestRows] = await Promise.all([
-        getMyAppointments(),
+        getMyAppointments({force: true}),
         getNotarialRequests(),
       ]);
       setAppointments(Array.isArray(appointmentRows) ? appointmentRows : []);
@@ -61,6 +66,61 @@ export default function ClientNotification({navigation}) {
 
   useEffect(() => {
     loadData();
+  }, [loadData]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let channel = null;
+
+    (async () => {
+      const {
+        data: {session},
+      } = await supabase.auth.getSession();
+      if (cancelled || !session?.user?.id) {
+        return;
+      }
+      const userId = session.user.id;
+      const ch = supabase
+        .channel(`client-appointments-${userId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'appointments',
+            filter: `client_id=eq.${userId}`,
+          },
+          payload => {
+            loadData();
+            const st = String(payload.new?.status ?? '').toLowerCase();
+            if (st === 'rescheduled') {
+              const {date, time} = formatScheduledAtDisplay(
+                payload.new?.scheduled_at,
+              );
+              const reason = getLatestRescheduleReason(payload.new?.notes ?? '');
+              Alert.alert(
+                'Appointment rescheduled',
+                reason
+                  ? `New time: ${date} at ${time}.\n\nReason: ${reason}`
+                  : `New time: ${date} at ${time}.\n\nOpen My Appointments for details.`,
+              );
+            }
+          },
+        )
+        .subscribe();
+      if (cancelled) {
+        supabase.removeChannel(ch);
+        return;
+      }
+      channel = ch;
+    })();
+
+    return () => {
+      cancelled = true;
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
   }, [loadData]);
 
   const notifications = useMemo(() => {
@@ -91,7 +151,12 @@ export default function ClientNotification({navigation}) {
           : completed
             ? `${item.title ?? 'Consultation'} has been marked completed.`
             : rescheduled
-              ? `${item.title ?? 'Consultation'} has a new schedule. Please review your updated appointment time.`
+              ? (() => {
+                  const {date, time} = formatScheduledAtDisplay(item.scheduled_at);
+                  const reason = getLatestRescheduleReason(item.notes);
+                  const line = `${item.title ?? 'Consultation'} is now on ${date} at ${time}.`;
+                  return reason ? `${line}\n\nReason: ${reason}` : `${line} Open My Appointments for full notes.`;
+                })()
             : `${item.title ?? 'Consultation'} is currently ${status}.`,
         action: approved || rescheduled || completed ? 'OPEN CHAT' : null,
         amount: item.amount,

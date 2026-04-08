@@ -179,8 +179,8 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 BEGIN
-  -- Create room if status is 'confirmed' AND it doesn't already exist
-  IF (NEW.status = 'confirmed') THEN
+  -- Create room for confirmed or rescheduled appointments (chat remains available after reschedule)
+  IF (NEW.status IN ('confirmed', 'rescheduled')) THEN
     INSERT INTO public.consultation_rooms (appointment_id)
     VALUES (NEW.id)
     ON CONFLICT (appointment_id) DO NOTHING;
@@ -518,3 +518,134 @@ BEGIN
   WHERE attorney_id = p_attorney_id AND date = p_date AND time = p_time;
 END;
 $$;
+
+-- Expo push token for client devices (optional; used by send-reschedule-push Edge Function)
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS expo_push_token text;
+
+-- ---------------------------------------------------------------------------
+-- Chat: typed messages + attachments (run in SQL Editor if DB already exists)
+-- ---------------------------------------------------------------------------
+ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS message_type text NOT NULL DEFAULT 'text';
+ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS file_bucket text;
+ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS file_path text;
+ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS file_name text;
+ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS mime_type text;
+ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS file_size_bytes bigint;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'messages_message_type_check'
+  ) THEN
+    ALTER TABLE public.messages
+      ADD CONSTRAINT messages_message_type_check
+      CHECK (message_type IN ('text', 'image', 'file'));
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_messages_room_nontext
+  ON public.messages (room_id)
+  WHERE message_type IS DISTINCT FROM 'text';
+
+CREATE OR REPLACE VIEW public.conversations AS
+SELECT id, appointment_id, is_closed, created_at, updated_at
+FROM public.consultation_rooms;
+
+-- Realtime: add messages to supabase_realtime publication (no-op if already member)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    BEGIN
+      ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;
+    EXCEPTION
+      WHEN duplicate_object THEN NULL;
+    END;
+  END IF;
+END $$;
+
+-- ---------------------------------------------------------------------------
+-- Storage: private buckets for chat uploads (path: appointment_id/user_id/filename)
+-- ---------------------------------------------------------------------------
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES
+  ('chat-images', 'chat-images', false, 10485760, ARRAY['image/jpeg','image/png','image/webp','image/gif']::text[]),
+  ('chat-files', 'chat-files', false, 26214400, NULL)
+ON CONFLICT (id) DO UPDATE SET
+  file_size_limit = EXCLUDED.file_size_limit,
+  allowed_mime_types = EXCLUDED.allowed_mime_types;
+
+DROP POLICY IF EXISTS "chat_images_select" ON storage.objects;
+CREATE POLICY "chat_images_select"
+ON storage.objects FOR SELECT TO authenticated
+USING (
+  bucket_id = 'chat-images'
+  AND EXISTS (
+    SELECT 1 FROM public.appointments a
+    WHERE a.id = (split_part(name, '/', 1))::uuid
+      AND (a.client_id = auth.uid() OR a.attorney_id = auth.uid())
+  )
+);
+
+DROP POLICY IF EXISTS "chat_images_insert" ON storage.objects;
+CREATE POLICY "chat_images_insert"
+ON storage.objects FOR INSERT TO authenticated
+WITH CHECK (
+  bucket_id = 'chat-images'
+  AND (split_part(name, '/', 2))::uuid = auth.uid()
+  AND EXISTS (
+    SELECT 1 FROM public.appointments a
+    WHERE a.id = (split_part(name, '/', 1))::uuid
+      AND (a.client_id = auth.uid() OR a.attorney_id = auth.uid())
+  )
+);
+
+DROP POLICY IF EXISTS "chat_images_delete" ON storage.objects;
+CREATE POLICY "chat_images_delete"
+ON storage.objects FOR DELETE TO authenticated
+USING (
+  bucket_id = 'chat-images'
+  AND (split_part(name, '/', 2))::uuid = auth.uid()
+  AND EXISTS (
+    SELECT 1 FROM public.appointments a
+    WHERE a.id = (split_part(name, '/', 1))::uuid
+      AND (a.client_id = auth.uid() OR a.attorney_id = auth.uid())
+  )
+);
+
+DROP POLICY IF EXISTS "chat_files_select" ON storage.objects;
+CREATE POLICY "chat_files_select"
+ON storage.objects FOR SELECT TO authenticated
+USING (
+  bucket_id = 'chat-files'
+  AND EXISTS (
+    SELECT 1 FROM public.appointments a
+    WHERE a.id = (split_part(name, '/', 1))::uuid
+      AND (a.client_id = auth.uid() OR a.attorney_id = auth.uid())
+  )
+);
+
+DROP POLICY IF EXISTS "chat_files_insert" ON storage.objects;
+CREATE POLICY "chat_files_insert"
+ON storage.objects FOR INSERT TO authenticated
+WITH CHECK (
+  bucket_id = 'chat-files'
+  AND (split_part(name, '/', 2))::uuid = auth.uid()
+  AND EXISTS (
+    SELECT 1 FROM public.appointments a
+    WHERE a.id = (split_part(name, '/', 1))::uuid
+      AND (a.client_id = auth.uid() OR a.attorney_id = auth.uid())
+  )
+);
+
+DROP POLICY IF EXISTS "chat_files_delete" ON storage.objects;
+CREATE POLICY "chat_files_delete"
+ON storage.objects FOR DELETE TO authenticated
+USING (
+  bucket_id = 'chat-files'
+  AND (split_part(name, '/', 2))::uuid = auth.uid()
+  AND EXISTS (
+    SELECT 1 FROM public.appointments a
+    WHERE a.id = (split_part(name, '/', 1))::uuid
+      AND (a.client_id = auth.uid() OR a.attorney_id = auth.uid())
+  )
+);

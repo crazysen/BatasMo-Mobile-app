@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   StyleSheet,
   Text,
@@ -8,36 +8,51 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
+  Alert,
+  ActivityIndicator,
+  Keyboard,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import {appendThreadMessage, ensureThreadSeed, getThreadMessages} from '../services/chatService';
+import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
+import {MaterialCommunityIcons} from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
+import ChatMessageBody from '../components/ChatMessageBody';
+import {
+  appendThreadAttachment,
+  appendThreadMessage,
+  attachThreadRealtime,
+  getThreadMessages,
+} from '../services/chatService';
 
-const ArrowLeft = (props) => <MaterialCommunityIcons name="arrow-left" {...props} />;
-const Paperclip = (props) => <MaterialCommunityIcons name="paperclip" {...props} />;
-const Send = (props) => <MaterialCommunityIcons name="send" {...props} />;
-const ShieldCheck = (props) => <MaterialCommunityIcons name="shield-check" {...props} />;
+const ArrowLeft = props => <MaterialCommunityIcons name="arrow-left" {...props} />;
+const Paperclip = props => <MaterialCommunityIcons name="paperclip" {...props} />;
+const Send = props => <MaterialCommunityIcons name="send" {...props} />;
+const ShieldCheck = props => <MaterialCommunityIcons name="shield-check" {...props} />;
 
-const MessageBubble = ({ item }) => {
+const MessageBubble = ({item}) => {
   const isMe = item.sender === 'me';
 
   return (
     <View style={[styles.messageContainer, isMe ? styles.myContainer : styles.clientContainer]}>
       <View style={[styles.bubble, isMe ? styles.myBubble : styles.clientBubble]}>
-        <Text style={[styles.messageText, isMe ? styles.myText : styles.clientText]}>
-          {item.text}
-        </Text>
+        <ChatMessageBody
+          item={item}
+          textStyle={[styles.messageText, isMe ? styles.myText : styles.clientText]}
+        />
       </View>
-      <Text style={[styles.timeText, isMe ? { textAlign: 'right' } : { textAlign: 'left' }]}>
+      <Text style={[styles.timeText, isMe ? {textAlign: 'right'} : {textAlign: 'left'}]}>
         {item.time}
       </Text>
     </View>
   );
 };
 
-export default function ConsultationChat({ navigation, route }) {
+export default function ConsultationChat({navigation, route}) {
+  const insets = useSafeAreaInsets();
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState([]);
+  const [sending, setSending] = useState(false);
+  const listRef = useRef(null);
   const clientName = route?.params?.clientName || 'Sarah Jenkins';
   const clientInitials = route?.params?.clientInitials || 'SJ';
   const threadId = useMemo(
@@ -46,85 +61,194 @@ export default function ConsultationChat({ navigation, route }) {
   );
 
   const loadThread = useCallback(async () => {
-    const seed = [
-      {
-        id: 'seed-1',
-        text: `Consultation thread started with ${clientName}.`,
-        sender: 'client',
-        time: new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}),
-      },
-    ];
-    await ensureThreadSeed(threadId, seed);
-    const rows = await getThreadMessages(threadId);
-    setMessages(rows);
-  }, [clientName, threadId]);
+    try {
+      const {messages: rows} = await getThreadMessages(threadId);
+      setMessages(rows);
+    } catch {
+      setMessages([]);
+    }
+  }, [threadId]);
 
   useEffect(() => {
     loadThread();
   }, [loadThread]);
 
   useEffect(() => {
-    const intervalId = setInterval(() => {
-      loadThread();
-    }, 1500);
+    let unsubscribe = () => {};
+    let cancelled = false;
+    (async () => {
+      try {
+        const unsub = await attachThreadRealtime(threadId, setMessages);
+        if (!cancelled) {
+          unsubscribe = unsub;
+        }
+      } catch {
+        // no room
+      }
+    })();
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [threadId]);
 
-    return () => clearInterval(intervalId);
-  }, [loadThread]);
+  useEffect(() => {
+    listRef.current?.scrollToEnd({animated: true});
+  }, [messages.length]);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      () => {
+        listRef.current?.scrollToEnd({animated: true});
+      },
+    );
+    return () => showSub.remove();
+  }, []);
 
   const handleSend = async () => {
-    if (!message.trim()) return;
-    const next = await appendThreadMessage(threadId, {
-      text: message,
-      sender: 'me',
+    if (!message.trim() || sending) {
+      return;
+    }
+    try {
+      setSending(true);
+      const {messages: next} = await appendThreadMessage(threadId, {
+        text: message,
+        sender: 'me',
+      });
+      setMessages(next);
+      setMessage('');
+    } catch (e) {
+      Alert.alert('Error', e?.message ?? 'Could not send.');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleAttachMenu = () => {
+    Alert.alert('Attach', 'Choose a source', [
+      {text: 'Photo library', onPress: () => pickImage()},
+      {text: 'File', onPress: () => pickFile()},
+      {text: 'Cancel', style: 'cancel'},
+    ]);
+  };
+
+  const pickImage = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.85,
     });
-    setMessages(next);
-    setMessage('');
+    if (result.canceled || !result.assets?.[0]) {
+      return;
+    }
+    const asset = result.assets[0];
+    try {
+      setSending(true);
+      const {messages: next} = await appendThreadAttachment(threadId, {
+        uri: asset.uri,
+        fileName: asset.fileName || 'photo.jpg',
+        mime: asset.mimeType || 'image/jpeg',
+        size: asset.fileSize ?? 0,
+        caption: message.trim() || undefined,
+      });
+      setMessages(next);
+      setMessage('');
+    } catch (e) {
+      Alert.alert('Error', e?.message ?? 'Upload failed.');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const pickFile = async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      copyToCacheDirectory: true,
+      type: '*/*',
+    });
+    if (result.canceled) {
+      return;
+    }
+    const asset =
+      result.assets?.[0] ??
+      (result.uri
+        ? {
+            uri: result.uri,
+            name: result.name,
+            mimeType: result.mimeType,
+            size: result.size,
+          }
+        : null);
+    if (!asset?.uri) {
+      return;
+    }
+    try {
+      setSending(true);
+      const {messages: next} = await appendThreadAttachment(threadId, {
+        uri: asset.uri,
+        fileName: asset.name || 'file',
+        mime: asset.mimeType || 'application/octet-stream',
+        size: asset.size ?? 0,
+        caption: message.trim() || undefined,
+      });
+      setMessages(next);
+      setMessage('');
+    } catch (e) {
+      Alert.alert('Error', e?.message ?? 'Upload failed.');
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.canGoBack() ? navigation.goBack() : null}>
-          <ArrowLeft size={24} color="#111827" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Consultation</Text>
-      </View>
-
-      {/* Client Info Bar */}
-      <View style={styles.clientBar}>
-        <View style={styles.avatarContainer}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{clientInitials}</Text>
-          </View>
-          <View style={styles.onlineStatus} />
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoid}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => (navigation.canGoBack() ? navigation.goBack() : null)}>
+            <ArrowLeft size={24} color="#111827" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Consultation</Text>
         </View>
-        <Text style={styles.clientName}>{clientName}</Text>
-      </View>
 
-      <FlatList
-        data={messages}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <MessageBubble item={item} />}
-        contentContainerStyle={styles.chatList}
-        ListHeaderComponent={
-          <>
+        <View style={styles.clientBar}>
+          <View style={styles.avatarContainer}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>{clientInitials}</Text>
+            </View>
+            <View style={styles.onlineStatus} />
+          </View>
+          <Text style={styles.clientName}>{clientName}</Text>
+        </View>
+
+        <FlatList
+          ref={listRef}
+          style={styles.messagesList}
+          data={messages}
+          keyExtractor={item => item.id}
+          renderItem={({item}) => <MessageBubble item={item} />}
+          contentContainerStyle={styles.chatList}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          onContentSizeChange={() => listRef.current?.scrollToEnd({animated: true})}
+          ListHeaderComponent={
             <View style={styles.encryptedBadge}>
               <ShieldCheck size={14} color="#F59E0B" />
               <Text style={styles.encryptedText}>END-TO-END ENCRYPTED SECURE CHANNEL</Text>
             </View>
-          </>
-        }
-      />
+          }
+        />
 
-      {/* Input Area */}
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-      >
-        <View style={styles.inputWrapper}>
+        <View style={[styles.inputWrapper, {paddingBottom: Math.max(insets.bottom, 16)}]}>
           <View style={styles.inputContainer}>
-            <TouchableOpacity style={styles.attachmentBtn}>
+            <TouchableOpacity style={styles.attachmentBtn} onPress={handleAttachMenu}>
               <Paperclip size={20} color="#9CA3AF" />
             </TouchableOpacity>
             <TextInput
@@ -136,9 +260,13 @@ export default function ConsultationChat({ navigation, route }) {
               multiline
               maxHeight={100}
             />
-            <TouchableOpacity style={styles.sendBtn} onPress={handleSend}>
-              <Send size={20} color="#FFF" />
-            </TouchableOpacity>
+            {sending ? (
+              <ActivityIndicator style={{marginRight: 8}} />
+            ) : (
+              <TouchableOpacity style={styles.sendBtn} onPress={handleSend}>
+                <Send size={20} color="#FFF" />
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -147,7 +275,9 @@ export default function ConsultationChat({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  container: {flex: 1, backgroundColor: '#F8FAFC'},
+  keyboardAvoid: {flex: 1},
+  messagesList: {flex: 1},
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -160,7 +290,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#1E3A8A', // Deep navy blue
+    color: '#1E3A8A',
     fontFamily: Platform.OS === 'ios' ? 'Times New Roman' : 'serif',
     marginLeft: 15,
   },
@@ -170,7 +300,7 @@ const styles = StyleSheet.create({
     padding: 16,
     backgroundColor: '#FFF',
   },
-  avatarContainer: { position: 'relative' },
+  avatarContainer: {position: 'relative'},
   avatar: {
     width: 40,
     height: 40,
@@ -179,7 +309,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  avatarText: { color: '#0369A1', fontWeight: 'bold', fontSize: 16 },
+  avatarText: {color: '#0369A1', fontWeight: 'bold', fontSize: 16},
   onlineStatus: {
     position: 'absolute',
     bottom: 0,
@@ -191,7 +321,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#FFF',
   },
-  clientName: { marginLeft: 12, fontSize: 16, fontWeight: '700', color: '#1E3A8A' },
+  clientName: {marginLeft: 12, fontSize: 16, fontWeight: '700', color: '#1E3A8A'},
   encryptedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -205,7 +335,7 @@ const styles = StyleSheet.create({
     borderColor: '#F1F5F9',
     elevation: 1,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: {width: 0, height: 1},
     shadowOpacity: 0.05,
   },
   encryptedText: {
@@ -215,17 +345,17 @@ const styles = StyleSheet.create({
     marginLeft: 6,
     letterSpacing: 0.5,
   },
-  chatList: { paddingHorizontal: 16, paddingBottom: 20 },
-  messageContainer: { marginBottom: 16, maxWidth: '85%' },
-  clientContainer: { alignSelf: 'flex-start' },
-  myContainer: { alignSelf: 'flex-end' },
+  chatList: {paddingHorizontal: 16, paddingBottom: 20},
+  messageContainer: {marginBottom: 16, maxWidth: '85%'},
+  clientContainer: {alignSelf: 'flex-start'},
+  myContainer: {alignSelf: 'flex-end'},
   bubble: {
     padding: 14,
     borderRadius: 15,
     marginBottom: 4,
   },
   clientBubble: {
-    backgroundColor: '#0F172A', // Dark Navy
+    backgroundColor: '#0F172A',
     borderTopLeftRadius: 2,
   },
   myBubble: {
@@ -234,14 +364,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#F1F5F9',
   },
-  messageText: { fontSize: 15, lineHeight: 22 },
-  clientText: { color: '#FFF' },
-  myText: { color: '#1E3A8A' },
-  timeText: { fontSize: 11, color: '#94A3B8', marginTop: 2 },
+  messageText: {fontSize: 15, lineHeight: 22},
+  clientText: {color: '#FFF'},
+  myText: {color: '#1E3A8A'},
+  timeText: {fontSize: 11, color: '#94A3B8', marginTop: 2},
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    paddingTop: 16,
+    paddingHorizontal: 16,
     backgroundColor: '#FFF',
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
@@ -265,7 +396,7 @@ const styles = StyleSheet.create({
     color: '#1E293B',
     maxHeight: 100,
   },
-  attachmentBtn: { padding: 4 },
+  attachmentBtn: {padding: 4},
   sendBtn: {
     width: 48,
     height: 48,
@@ -274,4 +405,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  backButton: {padding: 4},
 });

@@ -96,7 +96,7 @@ const ServiceCard = ({ item, onAccept, onReject, actionLoading }) => {
       <View style={styles.infoBox}>
         <View style={styles.dateRow}>
           <Calendar size={14} color="#94a3b8" />
-          <Text style={styles.dateText}>{formatDate(item.preferred_date)}</Text>
+          <Text style={styles.dateText}>{formatDate(item.created_at)}</Text>
         </View>
         <TouchableOpacity
           style={styles.fileDownload}

@@ -4,7 +4,6 @@ import {
   Alert,
   FlatList,
   Modal,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,7 +13,6 @@ import {
 } from 'react-native';
 
 import {SafeAreaView} from 'react-native-safe-area-context';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import {
@@ -107,23 +105,9 @@ export default function ClientNotarial({navigation}) {
 
 const NewRequestForm = ({navigation, onSubmitted}) => {
   const [serviceType, setServiceType] = useState('Affidavit of Loss');
-  const [preferredDate, setPreferredDate] = useState('');
   const [details, setDetails] = useState('');
   const [documentFile, setDocumentFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
-  const [showDatePicker, setShowDatePicker] = useState(false);
-
-  const handleDateChange = (event, selectedDate) => {
-    if (Platform.OS === 'android') {
-      setShowDatePicker(false);
-    }
-    if (selectedDate) {
-      const year = selectedDate.getFullYear();
-      const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
-      const day = String(selectedDate.getDate()).padStart(2, '0');
-      setPreferredDate(`${year}-${month}-${day}`);
-    }
-  };
 
   const pickDocument = async () => {
     try {
@@ -169,7 +153,6 @@ const NewRequestForm = ({navigation, onSubmitted}) => {
 
       const notarialData = {
         service_type: serviceType.trim(),
-        preferred_date: preferredDate || null,
         details: details.trim() || null,
         document_name: documentFile?.name || null,
         document_base64: documentBase64,
@@ -202,31 +185,6 @@ const NewRequestForm = ({navigation, onSubmitted}) => {
         <Text style={styles.uploadSubText}>PDF, DOC, DOCX (max 10MB)</Text>
       </TouchableOpacity>
 
-      <View style={styles.row}>
-        <View style={styles.halfInputLeft}>
-          <Text style={styles.inputLabel}>Preferred Date</Text>
-          <TouchableOpacity onPress={() => setShowDatePicker(true)}>
-            <View pointerEvents="none">
-              <TextInput
-                style={styles.input}
-                placeholder="YYYY-MM-DD"
-                value={preferredDate}
-                editable={false}
-              />
-            </View>
-          </TouchableOpacity>
-          {showDatePicker && (
-            <DateTimePicker
-              value={preferredDate ? new Date(preferredDate) : new Date()}
-              mode="date"
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              onChange={handleDateChange}
-              minimumDate={new Date()}
-            />
-          )}
-        </View>
-      </View>
-
       <Text style={styles.inputLabel}>Additional Notes</Text>
       <TextInput
         style={[styles.input, styles.textArea]}
@@ -249,10 +207,20 @@ const NewRequestForm = ({navigation, onSubmitted}) => {
   );
 };
 
+const RequestStatusNotificationHint = () => (
+  <View style={styles.statusNoticeBox}>
+    <Text style={styles.statusNoticeText}>
+      🔔 You will be notified in the app when your request is done or when the status is updated.
+    </Text>
+  </View>
+);
+
 const RequestStatusList = ({navigation, requests, loadingStatus}) => {
   if (loadingStatus) {
     return (
       <View style={styles.statusContainer}>
+        <Text style={[styles.sectionTitle, styles.statusTabTitle]}>Request Status</Text>
+        <RequestStatusNotificationHint />
         <View style={styles.statusCardCentered}>
           <ActivityIndicator color="#0F172A" />
           <Text style={styles.subInfoText}>Loading request status...</Text>
@@ -264,6 +232,8 @@ const RequestStatusList = ({navigation, requests, loadingStatus}) => {
   if (requests.length === 0) {
     return (
       <View style={styles.statusContainer}>
+        <Text style={[styles.sectionTitle, styles.statusTabTitle]}>Request Status</Text>
+        <RequestStatusNotificationHint />
         <View style={styles.statusCardCentered}>
           <Text style={styles.docTypeTitle}>No requests yet</Text>
           <Text style={styles.subInfoText}>Your notarial requests will appear here.</Text>
@@ -274,17 +244,14 @@ const RequestStatusList = ({navigation, requests, loadingStatus}) => {
 
   return (
     <View style={styles.statusContainer}>
-      <Text style={styles.sectionTitle}>Request Status</Text>
+      <Text style={[styles.sectionTitle, styles.statusTabTitle]}>Request Status</Text>
+      <RequestStatusNotificationHint />
 
       {requests.map(item => {
         const status = (item.status ?? 'PENDING').toUpperCase();
         const submittedDate = item.created_at
           ? new Date(item.created_at).toLocaleDateString()
           : 'N/A';
-        const preferredDate = item.preferred_date
-          ? new Date(item.preferred_date).toLocaleDateString()
-          : 'Not set';
-
         return (
           <View key={item.id} style={styles.statusCard}>
             <View style={styles.statusHeaderRow}>
@@ -312,7 +279,6 @@ const RequestStatusList = ({navigation, requests, loadingStatus}) => {
               </View>
             </View>
             <Text style={styles.subInfoText}>Submitted on {submittedDate}</Text>
-            <Text style={styles.scheduleText}>Preferred date: {preferredDate}</Text>
 
             {status === 'PENDING' && (
               <TouchableOpacity
@@ -321,7 +287,7 @@ const RequestStatusList = ({navigation, requests, loadingStatus}) => {
                   navigation.navigate('BookingSummary', {
                     serviceData: {
                       type: item.service_type,
-                      date: preferredDate,
+                      date: submittedDate,
                       time: 'To be confirmed',
                       amount: '₱4,000',
                     },
@@ -375,6 +341,22 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     marginBottom: 20,
   },
+  statusTabTitle: {
+    marginBottom: 12,
+  },
+  statusNoticeBox: {
+    backgroundColor: '#EFF6FF',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  statusNoticeText: {
+    fontSize: 13,
+    color: '#1E3A8A',
+    lineHeight: 20,
+  },
   inputLabel: {
     fontSize: 14,
     fontWeight: '600',
@@ -393,9 +375,6 @@ const styles = StyleSheet.create({
   },
   uploadMainText: {fontSize: 14, fontWeight: '700', color: '#1E293B'},
   uploadSubText: {fontSize: 12, color: '#64748B', marginTop: 4},
-  row: {flexDirection: 'row'},
-  halfInputLeft: {flex: 1, marginRight: 10},
-  halfInputRight: {flex: 1},
   input: {
     borderWidth: 1,
     borderColor: '#E2E8F0',
@@ -438,7 +417,6 @@ const styles = StyleSheet.create({
   badge: {paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8},
   badgeText: {fontSize: 10, fontWeight: '800'},
   subInfoText: {fontSize: 12, color: '#94A3B8', marginTop: 8, textAlign: 'center'},
-  scheduleText: {fontSize: 13, color: '#475569', marginTop: 10},
   paymentButton: {
     backgroundColor: '#1E293B',
     borderRadius: 12,

@@ -31,7 +31,6 @@ export default function Login({navigation}) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
   const [focusedField, setFocusedField] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lockoutSeconds, setLockoutSeconds] = useState(0);
@@ -183,9 +182,11 @@ export default function Login({navigation}) {
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => {
-              try {
+              if (navigation.canGoBack()) {
                 navigation.goBack();
-              } catch(e) {}
+              } else {
+                navigation.navigate('Landing');
+              }
             }}>
             <Text style={styles.backButtonText}>← Back</Text>
           </TouchableOpacity>
@@ -253,16 +254,7 @@ export default function Login({navigation}) {
             </TouchableOpacity>
           </View>
 
-          <View style={styles.optionsRow}>
-            <TouchableOpacity
-              style={styles.rememberMeContainer}
-              onPress={() => setRememberMe(!rememberMe)}>
-              <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
-                {rememberMe && <Text style={styles.checkmark}>✓</Text>}
-              </View>
-              <Text style={styles.rememberMeText}>Remember Me</Text>
-            </TouchableOpacity>
-
+          <View style={styles.forgotPasswordRow}>
             <TouchableOpacity
               onPress={() =>
                 navigation.navigate('VerifyIdentity', {email: email.trim()})
@@ -426,40 +418,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginLeft: 10,
   },
-  optionsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  forgotPasswordRow: {
+    alignItems: 'flex-end',
     marginBottom: 20,
     marginTop: 2,
-  },
-  rememberMeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: '#CBD5E1',
-    marginRight: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxChecked: {
-    backgroundColor: colors.navy,
-    borderColor: colors.navy,
-  },
-  checkmark: {
-    color: colors.white,
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  rememberMeText: {
-    fontSize: 13,
-    color: colors.blueGray,
-    fontWeight: '600',
   },
   forgotPasswordText: {
     fontSize: 13,
