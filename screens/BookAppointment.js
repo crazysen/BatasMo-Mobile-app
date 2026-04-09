@@ -10,11 +10,18 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import {getAttorneys} from '../services/attorneyService';
+import {REFERENCE_THEME as T} from '../constants/referenceTheme';
+import {ClientScreenShell, ClientFadeIn} from '../components/ClientScreenShell';
+import ClientChevronBack from '../components/ClientChevronBack';
 
 const ATTORNEYS_CACHE_KEY = 'book_attorneys_cache_v1';
 const ATTORNEYS_CACHE_TTL_MS = 5 * 60 * 1000;
+
+/** Back column + gap so subtitle aligns with title text, not the chevron. */
+const HEADER_BACK_COL = 28;
+const HEADER_BACK_GAP = 8;
+const SUBTITLE_INDENT = HEADER_BACK_COL + HEADER_BACK_GAP;
 
 const AttorneyCard = ({item, navigation}) => (
   <View style={styles.card}>
@@ -124,23 +131,26 @@ export default function BookAppointment({navigation}) {
   }, [loadAttorneys]);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.canGoBack() ? navigation.goBack() : null}>
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
-
-        <View style={styles.titleContainer}>
-          <Text style={styles.mainTitle}>Book an Appointment</Text>
+    <ClientScreenShell>
+      <ClientFadeIn>
+        <View style={styles.header}>
+          <View style={styles.titleRow}>
+            <View style={styles.backColumn}>
+              <ClientChevronBack
+                onPress={() => (navigation.canGoBack() ? navigation.goBack() : null)}
+              />
+            </View>
+            <Text style={styles.mainTitle} numberOfLines={2}>
+              Book an Appointment
+            </Text>
+          </View>
           <Text style={styles.subtitle}>Choose from our experienced attorneys</Text>
         </View>
-      </View>
+      </ClientFadeIn>
 
       {loading ? (
         <View style={styles.emptyContainer}>
-          <ActivityIndicator color="#0F172A" />
+          <ActivityIndicator color={T.gold[1]} />
           <Text style={styles.emptyText}>Loading attorney directory...</Text>
         </View>
       ) : attorneys.length === 0 ? (
@@ -149,9 +159,14 @@ export default function BookAppointment({navigation}) {
         </View>
       ) : (
         <FlatList
+          style={styles.listFlex}
           data={attorneys}
           keyExtractor={item => item.id}
-          renderItem={({item}) => <AttorneyCard item={item} navigation={navigation} />}
+          renderItem={({item, index}) => (
+            <ClientFadeIn delay={80 + index * 50}>
+              <AttorneyCard item={item} navigation={navigation} />
+            </ClientFadeIn>
+          )}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           initialNumToRender={8}
@@ -160,41 +175,42 @@ export default function BookAppointment({navigation}) {
           removeClippedSubviews
         />
       )}
-    </SafeAreaView>
+    </ClientScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  listFlex: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
   },
   header: {
     paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingTop: 12,
+    paddingBottom: 16,
   },
-  backButton: {
-    alignSelf: 'flex-start',
-    paddingVertical: 6,
-    marginBottom: 8,
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  backText: {
-    color: '#EAB308',
-    fontWeight: '700',
-    fontSize: 16,
-  },
-  titleContainer: {
-    marginTop: 6,
+  backColumn: {
+    width: HEADER_BACK_COL,
+    marginRight: HEADER_BACK_GAP,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
   },
   mainTitle: {
-    fontSize: 30,
+    flex: 1,
+    fontSize: 28,
     fontWeight: '800',
-    color: '#0F172A',
+    color: T.text,
+    lineHeight: 34,
   },
   subtitle: {
     fontSize: 14,
-    color: '#64748B',
-    marginTop: 4,
+    color: T.textSoft,
+    marginTop: 6,
+    marginLeft: SUBTITLE_INDENT,
+    lineHeight: 20,
   },
   listContent: {
     paddingHorizontal: 20,
@@ -206,18 +222,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 20,
   },
-  emptyText: {marginTop: 8, color: '#64748B', fontSize: 14, textAlign: 'center'},
+  emptyText: {marginTop: 8, color: T.textSoft, fontSize: 14, textAlign: 'center'},
   card: {
-    backgroundColor: '#FFF',
+    backgroundColor: 'rgba(18, 26, 36, 0.85)',
     borderRadius: 24,
     padding: 24,
     marginBottom: 20,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#F1F5F9',
+    borderColor: 'rgba(244, 215, 139, 0.12)',
     shadowColor: '#000',
     shadowOffset: {width: 0, height: 4},
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.2,
     shadowRadius: 10,
     elevation: 3,
   },
@@ -228,7 +244,9 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(244, 215, 139, 0.2)',
   },
   infoContainer: {
     alignItems: 'center',
@@ -242,21 +260,21 @@ const styles = StyleSheet.create({
   nameText: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#0F172A',
+    color: T.text,
     marginRight: 6,
   },
   verifiedIcon: {
-    color: '#EAB308',
+    color: T.gold[1],
     fontSize: 16,
     fontWeight: '800',
   },
   specialtyText: {
     fontSize: 13,
-    color: '#64748B',
+    color: T.textSoft,
   },
   experienceText: {
     fontSize: 12,
-    color: '#94A3B8',
+    color: T.textMuted,
     marginBottom: 8,
   },
   ratingRow: {
@@ -265,23 +283,23 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   ratingStar: {
-    color: '#EAB308',
+    color: T.gold[1],
     fontSize: 14,
   },
   ratingText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#0F172A',
+    color: T.text,
     marginLeft: 4,
   },
   priceText: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#EAB308',
+    color: T.gold[0],
     marginBottom: 20,
   },
   bookButton: {
-    backgroundColor: '#1E293B',
+    backgroundColor: T.gold[1],
     width: '100%',
     paddingVertical: 14,
     borderRadius: 12,
@@ -289,7 +307,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   bookButtonText: {
-    color: '#FFF',
+    color: T.base,
     fontWeight: '700',
     fontSize: 16,
   },
@@ -298,11 +316,11 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: '#1E293B',
+    borderColor: 'rgba(244, 215, 139, 0.45)',
     alignItems: 'center',
   },
   profileButtonText: {
-    color: '#1E293B',
+    color: T.gold[0],
     fontWeight: '700',
     fontSize: 16,
   },

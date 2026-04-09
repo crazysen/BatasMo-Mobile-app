@@ -1,19 +1,29 @@
 import React, { useState } from 'react';
 import {
+  Alert,
   StyleSheet,
   View,
   Text,
   TouchableOpacity,
   ScrollView,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { REFERENCE_THEME as T } from '../constants/referenceTheme';
+import { ClientScreenShell, ClientFadeInSoft } from '../components/ClientScreenShell';
 
 export default function BookingSummary({navigation, route}) {
   const [paymentMethod, setPaymentMethod] = useState('gcash');
   const serviceData = route?.params?.serviceData || { type: 'Power of Attorney', date: 'February 15, 2026', time: '2:00 PM', amount: '₱2,500' };
   const paymentContext = route?.params?.paymentContext || null;
+  const isNotarial = paymentContext?.sourceType === 'notarial';
 
   const handleProceedToPayment = () => {
+    if (isNotarial && !paymentContext?.sourceId) {
+      Alert.alert(
+        'Request not ready',
+        'Your notarial request was not saved. Go back and complete face verification again.',
+      );
+      return;
+    }
     navigation.navigate('Payment', { paymentMethod, serviceData, paymentContext });
   };
 
@@ -43,7 +53,10 @@ export default function BookingSummary({navigation, route}) {
   );
 
   return (
-    <SafeAreaView style={styles.overlay}>
+    <ClientScreenShell>
+      {/* ClientFadeInSoft: FadeIn avoids Android Text disappearing inside FadeInDown+Reanimated. */}
+      <ClientFadeInSoft style={styles.fill}>
+      <View style={styles.overlay}>
       <View style={styles.modalContent}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Booking Summary</Text>
@@ -54,7 +67,9 @@ export default function BookingSummary({navigation, route}) {
 
         <ScrollView contentContainerStyle={styles.scrollBody} showsVerticalScrollIndicator={false}>
           <View style={styles.detailsContainer}>
-            <Text style={styles.sectionTitle}>Appointment Details</Text>
+            <Text style={styles.sectionTitle}>
+              {isNotarial ? 'Notarial request details' : 'Appointment details'}
+            </Text>
             
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Attorney:</Text>
@@ -72,7 +87,9 @@ export default function BookingSummary({navigation, route}) {
             <View style={styles.divider} />
 
             <View style={styles.detailRow}>
-              <Text style={styles.totalLabel}>Consultation Fee:</Text>
+              <Text style={styles.totalLabel}>
+                {isNotarial ? 'Service fee:' : 'Consultation fee:'}
+              </Text>
               <Text style={styles.feeAmount}>{serviceData.amount}</Text>
             </View>
             <View style={styles.detailRow}>
@@ -90,70 +107,77 @@ export default function BookingSummary({navigation, route}) {
           </TouchableOpacity>
         </ScrollView>
       </View>
-    </SafeAreaView>
+      </View>
+      </ClientFadeInSoft>
+    </ClientScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.1)', justifyContent: 'center', padding: 16 },
+  fill: { flex: 1 },
+  overlay: { flex: 1, justifyContent: 'center', padding: 16 },
   modalContent: { 
-    backgroundColor: '#FFFFFF', 
+    backgroundColor: 'rgba(18, 26, 36, 0.95)', 
     borderRadius: 24, 
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 5
+    borderWidth: 1,
+    borderColor: 'rgba(244, 215, 139, 0.15)',
+    elevation: 8,
   },
   header: { 
-    backgroundColor: '#1E293B', 
+    backgroundColor: 'rgba(4, 7, 11, 0.6)', 
     flexDirection: 'row', 
     justifyContent: 'space-between', 
     padding: 20, 
-    alignItems: 'center' 
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(244, 215, 139, 0.1)',
   },
-  headerTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: 'bold' },
-  closeIcon: { color: '#FFFFFF', fontSize: 18 },
+  headerTitle: { color: T.text, fontSize: 18, fontWeight: 'bold' },
+  closeIcon: { color: T.textSoft, fontSize: 18 },
   scrollBody: { padding: 20 },
   detailsContainer: { 
-    backgroundColor: '#F8FAFC', 
+    backgroundColor: 'rgba(255,255,255,0.04)', 
     borderRadius: 16, 
     padding: 20, 
-    marginBottom: 24 
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(244, 215, 139, 0.1)',
   },
-  sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#1E293B', marginBottom: 16 },
+  sectionTitle: { fontSize: 16, fontWeight: 'bold', color: T.gold[0], marginBottom: 16 },
   detailRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-  detailLabel: { color: '#64748B', fontSize: 14 },
-  detailValue: { color: '#1E293B', fontSize: 14, fontWeight: '600', textAlign: 'right', flex: 1, marginLeft: 10 },
-  divider: { height: 1, backgroundColor: '#E2E8F0', marginVertical: 12 },
-  totalLabel: { color: '#1E293B', fontSize: 15, fontWeight: '600' },
-  totalLabelBold: { color: '#1E293B', fontSize: 16, fontWeight: 'bold' },
-  feeAmount: { color: '#D9B041', fontSize: 18, fontWeight: 'bold' },
-  totalAmount: { color: '#000000', fontSize: 20, fontWeight: 'bold' },
-  selectionTitle: { fontSize: 15, fontWeight: 'bold', color: '#1E293B', marginBottom: 16 },
+  detailLabel: { color: T.textSoft, fontSize: 14 },
+  detailValue: { color: T.text, fontSize: 14, fontWeight: '600', textAlign: 'right', flex: 1, marginLeft: 10 },
+  divider: { height: 1, backgroundColor: 'rgba(244, 215, 139, 0.1)', marginVertical: 12 },
+  totalLabel: { color: T.text, fontSize: 15, fontWeight: '600' },
+  totalLabelBold: { color: T.text, fontSize: 16, fontWeight: 'bold' },
+  feeAmount: { color: T.gold[0], fontSize: 18, fontWeight: 'bold' },
+  totalAmount: { color: T.gold[1], fontSize: 20, fontWeight: 'bold' },
+  selectionTitle: { fontSize: 15, fontWeight: 'bold', color: T.text, marginBottom: 16 },
   paymentCard: { 
     flexDirection: 'row', 
     alignItems: 'center', 
     padding: 16, 
     borderRadius: 12, 
     borderWidth: 1, 
-    borderColor: '#E2E8F0', 
-    marginBottom: 12 
+    borderColor: 'rgba(244, 215, 139, 0.15)', 
+    marginBottom: 12,
+    backgroundColor: 'rgba(4, 7, 11, 0.35)',
   },
-  paymentCardActive: { borderColor: '#1E293B', borderWidth: 1.5 },
+  paymentCardActive: { borderColor: T.gold[1], borderWidth: 1.5 },
   paymentIconContainer: { width: 40, height: 40, borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginRight: 16 },
   paymentIconText: { fontSize: 20 },
-  paymentLabel: { flex: 1, fontSize: 15, fontWeight: '600', color: '#1E293B' },
-  radioCircle: { width: 20, height: 20, borderRadius: 10, borderWidth: 1, borderColor: '#CBD5E1', justifyContent: 'center', alignItems: 'center' },
-  radioCircleActive: { borderColor: '#D9B041' },
-  radioInner: { width: 12, height: 12, borderRadius: 6, backgroundColor: '#D9B041' },
+  paymentLabel: { flex: 1, fontSize: 15, fontWeight: '600', color: T.text },
+  radioCircle: { width: 20, height: 20, borderRadius: 10, borderWidth: 1, borderColor: T.textSoft, justifyContent: 'center', alignItems: 'center' },
+  radioCircleActive: { borderColor: T.gold[1] },
+  radioInner: { width: 12, height: 12, borderRadius: 6, backgroundColor: T.gold[1] },
   proceedButton: { 
-    backgroundColor: '#1E293B', 
+    backgroundColor: T.gold[1], 
     paddingVertical: 16, 
     borderRadius: 12, 
     marginTop: 12,
     alignItems: 'center'
   },
-  proceedButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' },
+  proceedButtonText: { color: T.base, fontSize: 16, fontWeight: 'bold' },
 });
 

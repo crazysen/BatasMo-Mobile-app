@@ -8,8 +8,10 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
 import {getMyAppointments} from '../services/appointmentService';
+import {REFERENCE_THEME as T} from '../constants/referenceTheme';
+import {ClientScreenShell, ClientFadeIn} from '../components/ClientScreenShell';
+import ClientChevronBack from '../components/ClientChevronBack';
 import {getNotarialRequests} from '../services/notarialService';
 
 function formatCurrency(value) {
@@ -75,18 +77,21 @@ export default function TransactionHistory({navigation}) {
   }, [appointments, requests]);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ClientScreenShell>
       <ScrollView contentContainerStyle={styles.content}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.canGoBack() ? navigation.goBack() : null}>
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
+        <ClientFadeIn>
+        <ClientChevronBack
+          style={styles.backHit}
+          onPress={() => (navigation.canGoBack() ? navigation.goBack() : null)}
+        />
 
         <Text style={styles.title}>Transaction History</Text>
         <Text style={styles.subtitle}>Review your payment activity</Text>
+        </ClientFadeIn>
 
         {loading ? (
           <View style={styles.emptyState}>
-            <ActivityIndicator color="#0F172A" />
+            <ActivityIndicator color={T.gold[1]} />
             <Text style={styles.emptyText}>Loading transactions...</Text>
           </View>
         ) : transactions.length === 0 ? (
@@ -94,8 +99,9 @@ export default function TransactionHistory({navigation}) {
             <Text style={styles.emptyText}>No transactions yet.</Text>
           </View>
         ) : (
-          transactions.map(item => (
-            <View key={item.key} style={styles.card}>
+          transactions.map((item, index) => (
+            <ClientFadeIn key={item.key} delay={70 + index * 45}>
+            <View style={styles.card}>
               <Text style={styles.id}>{item.id}</Text>
               <Text style={styles.desc}>{item.description}</Text>
               <View style={styles.row}>
@@ -110,43 +116,42 @@ export default function TransactionHistory({navigation}) {
               </View>
               <Text style={styles.date}>{item.dateLabel}</Text>
             </View>
+            </ClientFadeIn>
           ))
         )}
       </ScrollView>
-    </SafeAreaView>
+    </ClientScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {flex: 1, backgroundColor: '#F8FAFC'},
   content: {padding: 20, paddingBottom: 24},
-  backButton: {alignSelf: 'flex-start', marginBottom: 10},
-  backText: {color: '#EAB308', fontWeight: '700', fontSize: 16},
-  title: {fontSize: 28, color: '#0F172A', fontWeight: 'bold'},
-  subtitle: {color: '#64748B', marginBottom: 16},
+  backHit: {alignSelf: 'flex-start', marginBottom: 10},
+  title: {fontSize: 28, color: T.text, fontWeight: 'bold'},
+  subtitle: {color: T.textSoft, marginBottom: 16},
   card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    backgroundColor: 'rgba(18, 26, 36, 0.85)',
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(244, 215, 139, 0.12)',
     padding: 14,
     marginBottom: 12,
   },
-  id: {fontSize: 12, color: '#94A3B8', marginBottom: 4},
-  desc: {fontSize: 14, color: '#0F172A', marginBottom: 8},
+  id: {fontSize: 12, color: T.textSoft, marginBottom: 4},
+  desc: {fontSize: 14, color: T.text, marginBottom: 8},
   row: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'},
-  amount: {fontSize: 16, fontWeight: '700', color: '#0F172A'},
+  amount: {fontSize: 16, fontWeight: '700', color: T.gold[0]},
   status: {fontSize: 12, fontWeight: '700'},
-  statusCompleted: {color: '#16A34A'},
-  statusPending: {color: '#B45309'},
-  date: {marginTop: 6, color: '#64748B', fontSize: 12},
+  statusCompleted: {color: '#6EE7B7'},
+  statusPending: {color: T.gold[0]},
+  date: {marginTop: 6, color: T.textSoft, fontSize: 12},
   emptyState: {
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 14,
-    backgroundColor: '#FFFFFF',
+    borderColor: 'rgba(244, 215, 139, 0.12)',
+    borderRadius: 16,
+    backgroundColor: 'rgba(18, 26, 36, 0.62)',
     padding: 20,
     alignItems: 'center',
   },
-  emptyText: {color: '#64748B', marginTop: 8},
+  emptyText: {color: T.textSoft, marginTop: 8},
 });

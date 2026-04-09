@@ -9,8 +9,10 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import {getMyAppointments} from '../services/appointmentService';
+import {REFERENCE_THEME as T} from '../constants/referenceTheme';
+import {ClientScreenShell, ClientFadeIn} from '../components/ClientScreenShell';
+import ClientChevronBack from '../components/ClientChevronBack';
 
 const MessagesHub = ({ navigation }) => {
   // State for search query
@@ -133,11 +135,10 @@ const MessagesHub = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ClientScreenShell>
+      <ClientFadeIn>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-          <Text style={styles.backIcon}>‹</Text>
-        </TouchableOpacity>
+        <ClientChevronBack style={styles.backHit} onPress={handleBack} />
         <Text style={styles.brand}>BATASMO HUB</Text>
         <Text style={styles.title}>Messages</Text>
       </View>
@@ -147,7 +148,7 @@ const MessagesHub = ({ navigation }) => {
         <TextInput 
           style={styles.searchInput} 
           placeholder="Search encrypted sessions..." 
-          placeholderTextColor="#64748B"
+          placeholderTextColor={T.textSoft}
           value={searchQuery}
           onChangeText={handleSearchChange}
         />
@@ -160,11 +161,12 @@ const MessagesHub = ({ navigation }) => {
 
       {loading ? (
         <View style={styles.emptyContainer}>
-          <ActivityIndicator color="#EAB308" />
+          <ActivityIndicator color={T.gold[1]} />
           <Text style={styles.emptyText}>Loading conversations...</Text>
         </View>
       ) : (
         <FlatList
+          style={styles.listFlex}
           data={filteredChatData}
           renderItem={({ item }) => <ChatItem item={item} />}
           keyExtractor={item => item.id}
@@ -176,27 +178,22 @@ const MessagesHub = ({ navigation }) => {
           }
         />
       )}
-    </SafeAreaView>
+      </ClientFadeIn>
+    </ClientScreenShell>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: '#020617' 
-  },
+  listFlex: {flex: 1},
   header: { 
     padding: 20 
   },
-  backButton: {
-    marginBottom: 10
-  },
-  backIcon: {
-    fontSize: 32,
-    color: 'white'
+  backHit: {
+    marginBottom: 10,
+    alignSelf: 'flex-start',
   },
   brand: { 
-    color: '#EAB308', 
+    color: T.gold[0], 
     fontSize: 12, 
     fontWeight: 'bold', 
     letterSpacing: 1 

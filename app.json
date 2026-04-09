@@ -4,6 +4,11 @@
     "slug": "BatasMoApp",
     "version": "1.0.0",
     "orientation": "portrait",
+    "backgroundColor": "#04070B",
+    "androidNavigationBar": {
+      "barStyle": "light-content",
+      "backgroundColor": "#04070B"
+    },
     "icon": "./assets/images/icon.png",
     "scheme": "batasmoapp",
     "userInterfaceStyle": "automatic",

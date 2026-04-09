@@ -8,7 +8,9 @@ import {
   TouchableOpacity,
   ScrollView,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { REFERENCE_THEME as T } from '../constants/referenceTheme';
+import { ClientScreenShell, ClientFadeInSoft } from '../components/ClientScreenShell';
+import ClientChevronBack from '../components/ClientChevronBack';
 import {updateAppointmentStatus, createAppointment} from '../services/appointmentService';
 import {updateNotarialRequestStatus} from '../services/notarialService';
 
@@ -61,6 +63,17 @@ export default function Payment({navigation, route}) {
 
   const handlePayNow = async () => {
     if (pin.length !== 4 || submitting) {
+      return;
+    }
+
+    const needsSourceId =
+      paymentContext?.sourceType === 'notarial' ||
+      paymentContext?.sourceType === 'appointment';
+    if (needsSourceId && !paymentContext?.sourceId) {
+      Alert.alert(
+        'Cannot complete payment',
+        'This booking is missing a reference. Go back to the summary and try again, or restart the request.',
+      );
       return;
     }
 
@@ -133,12 +146,11 @@ export default function Payment({navigation, route}) {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ClientScreenShell>
+      <ClientFadeInSoft style={styles.fill}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={handleCancel}>
-          <Text style={styles.backIcon}>‹</Text>
-        </TouchableOpacity>
-        
+        <ClientChevronBack onPress={handleCancel} style={styles.backButton} />
+
         <Text style={styles.headerLabel}>{getPaymentMethodLabel()} Payment</Text>
         
         <View style={styles.amountContainer}>
@@ -169,7 +181,7 @@ export default function Payment({navigation, route}) {
           disabled={pin.length < 4 || submitting}
         >
           {submitting ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
+            <ActivityIndicator size="small" color={T.base} />
           ) : (
             <Text style={styles.payButtonText}>Pay Now</Text>
           )}
@@ -179,44 +191,48 @@ export default function Payment({navigation, route}) {
           <Text style={styles.cancelText}>Cancel and go back</Text>
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+      </ClientFadeInSoft>
+    </ClientScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF' },
+  fill: { flex: 1 },
   header: {
-    backgroundColor: '#1E293B',
+    backgroundColor: 'rgba(18, 26, 36, 0.95)',
     paddingTop: 20,
     paddingBottom: 40,
     borderBottomLeftRadius: 40,
     borderBottomRightRadius: 40,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(244, 215, 139, 0.12)',
   },
-  backButton: { position: 'absolute', left: 20, top: 20 },
-  backIcon: { color: 'white', fontSize: 32 },
-  headerLabel: { color: 'white', fontSize: 18, fontWeight: 'bold', marginTop: 5 },
+  backButton: { position: 'absolute', left: 16, top: 18 },
+  headerLabel: { color: T.text, fontSize: 18, fontWeight: 'bold', marginTop: 5 },
   amountContainer: { alignItems: 'center', marginTop: 30 },
-  totalAmountLabel: { color: '#94A3B8', fontSize: 12, fontWeight: 'bold', letterSpacing: 1 },
-  amountValue: { color: 'white', fontSize: 48, fontWeight: 'bold', marginTop: 8 },
+  totalAmountLabel: { color: T.textSoft, fontSize: 12, fontWeight: 'bold', letterSpacing: 1 },
+  amountValue: { color: T.gold[0], fontSize: 48, fontWeight: 'bold', marginTop: 8 },
   
   content: { flex: 1, alignItems: 'center', paddingHorizontal: 30, paddingTop: 40 },
   brandRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
   gcashIcon: { 
-    backgroundColor: '#007AFF', 
+    backgroundColor: 'rgba(59, 130, 246, 0.35)', 
     width: 44, 
     height: 44, 
     borderRadius: 10, 
     justifyContent: 'center', 
     alignItems: 'center',
-    marginRight: 12 
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(96, 165, 250, 0.4)',
   },
   gcashIconText: { fontSize: 24 },
-  gcashText: { fontSize: 28, fontWeight: 'bold', color: '#007AFF' },
+  gcashText: { fontSize: 28, fontWeight: 'bold', color: '#60A5FA' },
   
   instructionText: { 
     textAlign: 'center', 
-    color: '#64748B', 
+    color: T.textSoft, 
     lineHeight: 22, 
     fontSize: 15,
     marginBottom: 40,
@@ -225,8 +241,8 @@ const styles = StyleSheet.create({
   
   pinContainer: { flexDirection: 'row', marginBottom: 30 },
   dot: { width: 16, height: 16, borderRadius: 8, marginHorizontal: 10 },
-  dotFilled: { backgroundColor: '#0F172A' },
-  dotEmpty: { borderWidth: 2, borderColor: '#E2E8F0', backgroundColor: 'transparent' },
+  dotFilled: { backgroundColor: T.gold[1] },
+  dotEmpty: { borderWidth: 2, borderColor: 'rgba(244, 215, 139, 0.35)', backgroundColor: 'transparent' },
 
   keypad: { width: '100%', marginBottom: 30 },
   keypadRow: { flexDirection: 'row', justifyContent: 'center', marginBottom: 12 },
@@ -236,26 +252,28 @@ const styles = StyleSheet.create({
     justifyContent: 'center', 
     alignItems: 'center', 
     marginHorizontal: 10,
-    backgroundColor: '#F1F5F9',
-    borderRadius: 12 
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(244, 215, 139, 0.12)',
   },
-  keypadButtonEmpty: { backgroundColor: 'transparent' },
-  keypadText: { fontSize: 24, fontWeight: '600', color: '#0F172A' },
+  keypadButtonEmpty: { backgroundColor: 'transparent', borderWidth: 0 },
+  keypadText: { fontSize: 24, fontWeight: '600', color: T.text },
   
   payButton: { 
-    backgroundColor: '#0F172A', 
+    backgroundColor: T.gold[1], 
     width: '100%', 
     paddingVertical: 18, 
     borderRadius: 15,
-    shadowColor: '#000',
+    shadowColor: 'rgba(212, 175, 55, 0.45)',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 4
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 6
   },
-  payButtonText: { textAlign: 'center', color: 'white', fontWeight: 'bold', fontSize: 16 },
-  payButtonDisabled: { backgroundColor: '#94A3B8' },
+  payButtonText: { textAlign: 'center', color: T.base, fontWeight: 'bold', fontSize: 16 },
+  payButtonDisabled: { backgroundColor: 'rgba(148, 163, 184, 0.4)' },
   cancelButton: { marginTop: 25 },
-  cancelText: { color: '#64748B', fontWeight: '600' }
+  cancelText: { color: T.textSoft, fontWeight: '600' }
 });
 

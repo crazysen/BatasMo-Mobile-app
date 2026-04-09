@@ -6,7 +6,9 @@ import {
   TouchableOpacity,
   ScrollView,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { REFERENCE_THEME as T } from '../constants/referenceTheme';
+import { ClientScreenShell, ClientFadeIn } from '../components/ClientScreenShell';
+import ClientChevronBack from '../components/ClientChevronBack';
 
 export default function PaymentMethod({navigation, route}) {
   const [selectedMethod, setSelectedMethod] = useState(null);
@@ -32,12 +34,11 @@ export default function PaymentMethod({navigation, route}) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView>
+    <ClientScreenShell>
+      <ScrollView contentContainerStyle={styles.scrollPad}>
+        <ClientFadeIn>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={handleCancel}>
-            <Text style={styles.backIcon}>‹</Text>
-          </TouchableOpacity>
+          <ClientChevronBack style={styles.backHit} onPress={handleCancel} />
           <Text style={styles.headerTitle}>Choose Payment Method</Text>
           <Text style={styles.headerSubtitle}>Select how you want to pay</Text>
         </View>
@@ -46,11 +47,12 @@ export default function PaymentMethod({navigation, route}) {
           <Text style={styles.amountLabel}>Total Amount</Text>
           <Text style={styles.amountValue}>{serviceData.amount}</Text>
         </View>
+        </ClientFadeIn>
 
         <View style={styles.methodsContainer}>
-          {paymentMethods.map((method) => (
+          {paymentMethods.map((method, index) => (
+            <ClientFadeIn key={method.id} delay={100 + index * 50}>
             <TouchableOpacity
-              key={method.id}
               style={[
                 styles.methodCard,
                 selectedMethod === method.id && styles.methodCardSelected,
@@ -73,9 +75,11 @@ export default function PaymentMethod({navigation, route}) {
                 {selectedMethod === method.id && <Text style={styles.radioCheck}>✓</Text>}
               </View>
             </TouchableOpacity>
+            </ClientFadeIn>
           ))}
         </View>
 
+        <ClientFadeIn delay={200}>
         <View style={styles.bottomSection}>
           <TouchableOpacity
             style={[styles.continueButton, !selectedMethod && styles.continueButtonDisabled]}
@@ -89,53 +93,50 @@ export default function PaymentMethod({navigation, route}) {
             <Text style={styles.cancelText}>Cancel</Text>
           </TouchableOpacity>
         </View>
+        </ClientFadeIn>
       </ScrollView>
-    </SafeAreaView>
+    </ClientScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
+  scrollPad: { paddingBottom: 36 },
   header: {
     padding: 20,
     paddingTop: 10,
   },
-  backButton: {
+  backHit: {
     marginBottom: 10,
-  },
-  backIcon: {
-    fontSize: 32,
-    color: '#0F172A',
+    alignSelf: 'flex-start',
   },
   headerTitle: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#0F172A',
+    color: T.text,
     marginBottom: 8,
   },
   headerSubtitle: {
     fontSize: 14,
-    color: '#64748B',
+    color: T.textSoft,
   },
   amountBox: {
     marginHorizontal: 20,
     marginBottom: 30,
-    backgroundColor: '#0F172A',
+    backgroundColor: 'rgba(18, 26, 36, 0.9)',
     padding: 20,
     borderRadius: 16,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(244, 215, 139, 0.2)',
   },
   amountLabel: {
-    color: '#94A3B8',
+    color: T.textSoft,
     fontSize: 12,
     fontWeight: 'bold',
     letterSpacing: 1,
   },
   amountValue: {
-    color: '#EAB308',
+    color: T.gold[0],
     fontSize: 32,
     fontWeight: 'bold',
     marginTop: 8,
@@ -146,17 +147,17 @@ const styles = StyleSheet.create({
   },
   methodCard: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(18, 26, 36, 0.85)',
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
     borderWidth: 2,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(244, 215, 139, 0.12)',
     alignItems: 'center',
   },
   methodCardSelected: {
-    borderColor: '#0F172A',
-    backgroundColor: '#F8FAFC',
+    borderColor: T.gold[1],
+    backgroundColor: 'rgba(244, 215, 139, 0.08)',
   },
   methodContent: {
     flex: 1,
@@ -173,28 +174,28 @@ const styles = StyleSheet.create({
   methodName: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#0F172A',
+    color: T.text,
     marginBottom: 4,
   },
   methodDescription: {
     fontSize: 12,
-    color: '#64748B',
+    color: T.textSoft,
   },
   radioButton: {
     width: 24,
     height: 24,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(244, 215, 139, 0.3)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   radioButtonSelected: {
-    backgroundColor: '#0F172A',
-    borderColor: '#0F172A',
+    backgroundColor: T.gold[1],
+    borderColor: T.gold[1],
   },
   radioCheck: {
-    color: 'white',
+    color: T.base,
     fontWeight: 'bold',
     fontSize: 14,
   },
@@ -203,16 +204,16 @@ const styles = StyleSheet.create({
     paddingBottom: 30,
   },
   continueButton: {
-    backgroundColor: '#0F172A',
+    backgroundColor: T.gold[1],
     paddingVertical: 16,
     borderRadius: 12,
     marginBottom: 12,
   },
   continueButtonDisabled: {
-    backgroundColor: '#94A3B8',
+    backgroundColor: 'rgba(148, 163, 184, 0.4)',
   },
   continueButtonText: {
-    color: 'white',
+    color: T.base,
     textAlign: 'center',
     fontWeight: 'bold',
     fontSize: 16,
@@ -221,12 +222,11 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(244, 215, 139, 0.2)',
   },
   cancelText: {
-    color: '#64748B',
+    color: T.textSoft,
     textAlign: 'center',
     fontWeight: '600',
   },
 });
-

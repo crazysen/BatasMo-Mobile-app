@@ -5,7 +5,8 @@ import {
   Text,
   TouchableOpacity,
   } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { REFERENCE_THEME as T } from '../constants/referenceTheme';
+import { ClientScreenShell, ClientFadeInSoft } from '../components/ClientScreenShell';
 
 export default function PaymentSuccessful({navigation, route}) {
   const amount = route?.params?.amount || '₱2,500.00';
@@ -19,7 +20,9 @@ export default function PaymentSuccessful({navigation, route}) {
   };
 
   return (
-    <SafeAreaView style={styles.overlay}>
+    <ClientScreenShell>
+      <ClientFadeInSoft style={styles.fill}>
+      <View style={styles.overlay}>
       <View style={styles.card}>
         <View style={styles.iconCircle}>
           <Text style={styles.checkMark}>✓</Text>
@@ -46,93 +49,101 @@ export default function PaymentSuccessful({navigation, route}) {
           <Text style={styles.buttonText}>Go back to dashboard</Text>
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+      </View>
+      </ClientFadeInSoft>
+    </ClientScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
+  fill: {flex: 1},
   overlay: {
     flex: 1,
-    backgroundColor: '#0F172A',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
   },
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(18, 26, 36, 0.95)',
     borderRadius: 32,
     padding: 32,
     width: '100%',
     alignItems: 'center',
     elevation: 8,
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 10 },
+    borderWidth: 1,
+    borderColor: 'rgba(244, 215, 139, 0.2)',
+    shadowColor: 'rgba(212, 175, 55, 0.45)',
+    shadowOpacity: 0.25,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 12 },
   },
   iconCircle: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#D9B041',
+    backgroundColor: T.gold[1],
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 24,
   },
   checkMark: {
-    color: '#FFFFFF',
+    color: T.base,
     fontSize: 40,
     fontWeight: 'bold',
   },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#0F172A',
+    color: T.text,
     textAlign: 'center',
     marginBottom: 8,
   },
   transactionId: {
     fontSize: 10,
-    color: '#94A3B8',
+    color: T.textSoft,
     fontWeight: 'bold',
     letterSpacing: 1.5,
     marginBottom: 12,
   },
   completedPill: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: 'rgba(16, 185, 129, 0.2)',
     borderRadius: 20,
     paddingHorizontal: 14,
     paddingVertical: 6,
     marginBottom: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.35)',
   },
   completedPillText: {
-    color: '#166534',
+    color: '#6EE7B7',
     fontWeight: '700',
     fontSize: 12,
   },
   amountCard: {
-    backgroundColor: '#1E293B',
+    backgroundColor: 'rgba(4, 7, 11, 0.5)',
     width: '100%',
     paddingVertical: 24,
     borderRadius: 20,
     alignItems: 'center',
     marginBottom: 30,
+    borderWidth: 1,
+    borderColor: 'rgba(244, 215, 139, 0.12)',
   },
   amountLabel: {
-    color: '#94A3B8',
+    color: T.textSoft,
     fontSize: 12,
     fontWeight: 'bold',
     letterSpacing: 1,
     marginBottom: 8,
   },
   amountValue: {
-    color: '#FFFFFF',
+    color: T.gold[0],
     fontSize: 36,
     fontWeight: 'bold',
   },
   infoText: {
     fontSize: 14,
-    color: '#64748B',
+    color: T.textMuted,
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 28,
@@ -140,20 +151,20 @@ const styles = StyleSheet.create({
   },
   boldText: {
     fontWeight: 'bold',
-    color: '#475569',
+    color: T.gold[0],
   },
   dashboardButton: {
-    backgroundColor: '#D9B041',
+    backgroundColor: T.gold[1],
     paddingVertical: 18,
     borderRadius: 16,
     width: '100%',
-    shadowColor: '#D9B041',
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
+    shadowColor: 'rgba(212, 175, 55, 0.45)',
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
   },
   buttonText: {
-    color: '#FFFFFF',
+    color: T.base,
     textAlign: 'center',
     fontWeight: 'bold',
     fontSize: 16,

@@ -6,10 +6,17 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  ScrollView,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
+import { REFERENCE_THEME as T } from '../constants/referenceTheme';
+import { ClientScreenShell, ClientFadeIn } from '../components/ClientScreenShell';
+import ClientChevronBack from '../components/ClientChevronBack';
+
+const HEADER_BACK_COL = 28;
+const HEADER_BACK_GAP = 8;
+const SUBTITLE_INDENT = HEADER_BACK_COL + HEADER_BACK_GAP;
 
 export default function UploadIDScreen({ navigation, route }) {
   const notarialData = route?.params?.notarialData || {};
@@ -66,90 +73,120 @@ export default function UploadIDScreen({ navigation, route }) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.canGoBack() ? navigation.goBack() : null}>
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
-        <View style={styles.headerTitleContainer}>
-          <Text style={styles.headerTitle}>Verification step</Text>
+    <ClientScreenShell>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <ClientFadeIn>
+        <View style={styles.header}>
+          <View style={styles.titleRow}>
+            <View style={styles.backColumn}>
+              <ClientChevronBack
+                onPress={() => (navigation.canGoBack() ? navigation.goBack() : null)}
+              />
+            </View>
+            <Text style={styles.headerTitle} numberOfLines={2}>
+              Verification step
+            </Text>
+          </View>
           <Text style={styles.headerSubtitle}>
             Please upload a valid government ID
           </Text>
         </View>
-      </View>
 
-      <View style={styles.content}>
-        <View style={styles.formCard}>
-          <Text style={styles.sectionTitle}>Upload ID</Text>
-          <Text style={styles.instructionText}>
-            To process your Affidavit of Loss, we need to verify your identity. Please upload a clear photo or PDF of a valid government ID.
-          </Text>
-
-          <Text style={styles.inputLabel}>Valid/Government ID</Text>
-          <TouchableOpacity style={styles.uploadArea} onPress={pickID}>
-            <Text style={styles.uploadMainText}>
-              {documentFile?.name || 'Click to upload your ID'}
+        <View style={styles.content}>
+          <View style={styles.formCard}>
+            <Text style={styles.sectionTitle}>Upload ID</Text>
+            <Text style={styles.instructionText}>
+              To process your Affidavit of Loss, we need to verify your identity. Please upload a clear photo or PDF of a valid government ID.
             </Text>
-            <Text style={styles.uploadSubText}>JPG, PNG, PDF (max 10MB)</Text>
-          </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.submitButton, (!documentFile || submitting) && styles.submitButtonDisabled]}
-            onPress={handleNext}
-            disabled={!documentFile || submitting}>
-            {submitting ? (
-              <ActivityIndicator color="#FFF" />
-            ) : (
-              <Text style={styles.submitButtonText}>Next</Text>
-            )}
-          </TouchableOpacity>
+            <Text style={styles.inputLabel}>Valid/Government ID</Text>
+            <TouchableOpacity style={styles.uploadArea} onPress={pickID}>
+              <Text style={styles.uploadMainText}>
+                {documentFile?.name || 'Click to upload your ID'}
+              </Text>
+              <Text style={styles.uploadSubText}>JPG, PNG, PDF (max 10MB)</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.submitButton, (!documentFile || submitting) && styles.submitButtonDisabled]}
+              onPress={handleNext}
+              disabled={!documentFile || submitting}>
+              {submitting ? (
+                <ActivityIndicator color={T.base} />
+              ) : (
+                <Text style={styles.submitButtonText}>Next</Text>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
-    </SafeAreaView>
+        </ClientFadeIn>
+      </ScrollView>
+    </ClientScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
-  header: { padding: 20, flexDirection: 'row', alignItems: 'flex-start' },
-  backButton: { paddingVertical: 6, marginRight: 8 },
-  backText: { color: '#EAB308', fontWeight: '700', fontSize: 16 },
-  headerTitleContainer: { flex: 1 },
-  headerTitle: { fontSize: 22, fontWeight: '800', color: '#0F172A' },
-  headerSubtitle: { fontSize: 13, color: '#64748B' },
+  scroll: { paddingBottom: 32 },
+  header: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 16,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  backColumn: {
+    width: HEADER_BACK_COL,
+    marginRight: HEADER_BACK_GAP,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+  },
+  headerTitle: {
+    flex: 1,
+    fontSize: 22,
+    fontWeight: '800',
+    color: T.text,
+    lineHeight: 28,
+  },
+  headerSubtitle: {
+    fontSize: 13,
+    color: T.textSoft,
+    marginTop: 6,
+    marginLeft: SUBTITLE_INDENT,
+    lineHeight: 18,
+  },
   content: { padding: 20 },
   formCard: {
-    backgroundColor: '#FFF',
+    backgroundColor: 'rgba(18, 26, 36, 0.88)',
     borderRadius: 20,
     padding: 20,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(244, 215, 139, 0.12)',
   },
-  sectionTitle: { fontSize: 18, fontWeight: '700', color: '#0F172A', marginBottom: 10 },
-  instructionText: { fontSize: 14, color: '#475569', marginBottom: 20, lineHeight: 20 },
-  inputLabel: { fontSize: 14, fontWeight: '600', color: '#475569', marginBottom: 8, marginTop: 15 },
+  sectionTitle: { fontSize: 18, fontWeight: '700', color: T.gold[0], marginBottom: 10 },
+  instructionText: { fontSize: 14, color: T.textMuted, marginBottom: 20, lineHeight: 20 },
+  inputLabel: { fontSize: 14, fontWeight: '600', color: T.textSoft, marginBottom: 8, marginTop: 15 },
   uploadArea: {
     borderWidth: 1.5,
-    borderColor: '#CBD5E1',
+    borderColor: 'rgba(244, 215, 139, 0.25)',
     borderStyle: 'dashed',
     borderRadius: 12,
     padding: 30,
     alignItems: 'center',
-    backgroundColor: '#F1F5F9',
+    backgroundColor: 'rgba(255,255,255,0.04)',
     marginBottom: 30,
   },
-  uploadMainText: { fontSize: 14, fontWeight: '700', color: '#1E293B', textAlign: 'center' },
-  uploadSubText: { fontSize: 12, color: '#64748B', marginTop: 4 },
+  uploadMainText: { fontSize: 14, fontWeight: '700', color: T.text, textAlign: 'center' },
+  uploadSubText: { fontSize: 12, color: T.textSoft, marginTop: 4 },
   submitButton: {
-    backgroundColor: '#0F172A',
+    backgroundColor: T.gold[1],
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
   },
   submitButtonDisabled: {
-    backgroundColor: '#94A3B8',
+    backgroundColor: 'rgba(148, 163, 184, 0.4)',
   },
-  submitButtonText: { color: '#FFF', fontWeight: '700', fontSize: 16 },
+  submitButtonText: { color: T.base, fontWeight: '700', fontSize: 16 },
 });

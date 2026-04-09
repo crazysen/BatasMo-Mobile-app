@@ -9,11 +9,13 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
 import {
   formatAppointmentNotesForDisplay,
   getMyAppointments,
 } from '../services/appointmentService';
+import {REFERENCE_THEME as T} from '../constants/referenceTheme';
+import {ClientScreenShell, ClientFadeIn} from '../components/ClientScreenShell';
+import ClientChevronBack from '../components/ClientChevronBack';
 
 function resolveScheduleValue(item) {
   return (
@@ -95,18 +97,18 @@ export default function MyAppointments({navigation}) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ClientScreenShell>
       <ScrollView contentContainerStyle={styles.content}>
-        <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
+        <ClientFadeIn>
+        <ClientChevronBack style={styles.backHit} onPress={handleBack} />
 
         <Text style={styles.screenTitle}>My Appointments</Text>
         <Text style={styles.screenSubtitle}>Manage and track all your appointments</Text>
+        </ClientFadeIn>
 
         {loading ? (
           <View style={styles.emptyCard}>
-            <ActivityIndicator color="#0F172A" />
+            <ActivityIndicator color={T.gold[1]} />
             <Text style={styles.emptyText}>Loading appointments...</Text>
           </View>
         ) : appointments.length === 0 ? (
@@ -115,7 +117,7 @@ export default function MyAppointments({navigation}) {
             <Text style={styles.emptyText}>Your bookings will appear here once submitted.</Text>
           </View>
         ) : (
-          appointments.map(item => {
+          appointments.map((item, index) => {
             const status = (item.status ?? 'PENDING').toUpperCase();
             const {date, time} = formatDateTime(resolveScheduleValue(item));
             const canChat =
@@ -123,7 +125,8 @@ export default function MyAppointments({navigation}) {
               status === 'COMPLETED' ||
               status === 'RESCHEDULED';
             return (
-              <View key={item.id} style={styles.card}>
+              <ClientFadeIn key={item.id} delay={60 + index * 55}>
+              <View style={styles.card}>
                 <View style={styles.cardHeader}>
                   <View>
                     <Text style={styles.lawyerName}>{item.attorney_name ?? 'Attorney not assigned'}</Text>
@@ -170,60 +173,69 @@ export default function MyAppointments({navigation}) {
                   </View>
                 )}
               </View>
+              </ClientFadeIn>
             );
           })
         )}
       </ScrollView>
-    </SafeAreaView>
+    </ClientScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {flex: 1, backgroundColor: '#F8FAFC'},
   content: {padding: 20, paddingBottom: 32},
-  backButton: {alignSelf: 'flex-start', marginBottom: 10},
-  backText: {color: '#EAB308', fontWeight: '700', fontSize: 16},
-  screenTitle: {fontSize: 28, fontWeight: 'bold', color: '#0F172A'},
-  screenSubtitle: {color: '#64748B', marginBottom: 16},
+  backHit: {alignSelf: 'flex-start', marginBottom: 10},
+  screenTitle: {fontSize: 28, fontWeight: 'bold', color: T.text},
+  screenSubtitle: {color: T.textSoft, marginBottom: 16},
   card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    backgroundColor: 'rgba(18, 26, 36, 0.85)',
+    borderRadius: 20,
     padding: 16,
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(244, 215, 139, 0.12)',
   },
   cardHeader: {flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10},
-  lawyerName: {fontSize: 18, fontWeight: '700', color: '#0F172A'},
-  specialty: {fontSize: 13, color: '#64748B'},
+  lawyerName: {fontSize: 18, fontWeight: '700', color: T.text},
+  specialty: {fontSize: 13, color: T.textSoft},
   badgeRow: {flexDirection: 'row'},
-  badgeDark: {backgroundColor: '#1E293B', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, marginLeft: 6},
-  badgeDarkText: {color: '#FFFFFF', fontSize: 10, fontWeight: '700'},
-  detailText: {color: '#475569', marginBottom: 4},
+  badgeDark: {
+    backgroundColor: 'rgba(244, 215, 139, 0.18)',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginLeft: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(244, 215, 139, 0.25)',
+  },
+  badgeDarkText: {color: T.gold[0], fontSize: 10, fontWeight: '700'},
+  detailText: {color: T.textMuted, marginBottom: 4},
   primaryButton: {
     marginTop: 12,
-    backgroundColor: '#1E293B',
-    borderRadius: 10,
+    backgroundColor: T.gold[1],
+    borderRadius: 12,
     paddingVertical: 12,
     alignItems: 'center',
   },
-  primaryButtonText: {color: '#FFFFFF', fontWeight: '700'},
+  primaryButtonText: {color: T.base, fontWeight: '700'},
   pendingState: {
     marginTop: 12,
-    backgroundColor: '#FEF3C7',
+    backgroundColor: 'rgba(251, 191, 36, 0.12)',
     borderRadius: 10,
     paddingVertical: 10,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(251, 191, 36, 0.25)',
   },
-  pendingStateText: {color: '#92400E', fontWeight: '700'},
+  pendingStateText: {color: T.gold[0], fontWeight: '700'},
   emptyCard: {
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF',
+    borderColor: 'rgba(244, 215, 139, 0.12)',
+    borderRadius: 20,
+    backgroundColor: 'rgba(18, 26, 36, 0.62)',
     padding: 20,
     alignItems: 'center',
   },
-  emptyTitle: {fontSize: 16, fontWeight: '700', color: '#0F172A', marginBottom: 6},
-  emptyText: {fontSize: 13, color: '#64748B', textAlign: 'center'},
+  emptyTitle: {fontSize: 16, fontWeight: '700', color: T.text, marginBottom: 6},
+  emptyText: {fontSize: 13, color: T.textSoft, textAlign: 'center'},
 });

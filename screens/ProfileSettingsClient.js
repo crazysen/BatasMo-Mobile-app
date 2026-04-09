@@ -9,8 +9,10 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import {useUserProfile} from '../context/UserProfileContext';
+import {REFERENCE_THEME as T} from '../constants/referenceTheme';
+import {ClientScreenShell, ClientFadeIn} from '../components/ClientScreenShell';
+import ClientChevronBack from '../components/ClientChevronBack';
 import {getMyProfile, updateMyProfile} from '../services/profileService';
 
 const ProfileSettingsClient = ({navigation}) => {
@@ -127,18 +129,24 @@ const ProfileSettingsClient = ({navigation}) => {
     .join('') || 'AJ';
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ClientScreenShell>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.canGoBack() ? navigation.goBack() : null}>
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Profile Settings</Text>
+        <View style={styles.headerBar}>
+          <View style={styles.headerSide}>
+            <ClientChevronBack onPress={() => (navigation.canGoBack() ? navigation.goBack() : null)} />
+          </View>
+          <Text style={styles.headerTitleCenter} numberOfLines={1}>
+            Profile Settings
+          </Text>
+          <View style={styles.headerSide} />
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <ClientFadeIn>
         {loading ? (
           <View style={styles.loadingCard}>
-            <ActivityIndicator color="#0F172A" />
+            <ActivityIndicator color={T.gold[1]} />
             <Text style={styles.loadingText}>Loading profile...</Text>
           </View>
         ) : null}
@@ -157,6 +165,7 @@ const ProfileSettingsClient = ({navigation}) => {
           <Text style={styles.label}>Full Name</Text>
           <TextInput
             style={styles.input}
+            placeholderTextColor={T.textSoft}
             value={name}
             onChangeText={setName}
             placeholder="Full name"
@@ -165,6 +174,7 @@ const ProfileSettingsClient = ({navigation}) => {
           <Text style={styles.label}>Email Address</Text>
           <TextInput
             style={[styles.input, styles.disabledInput]}
+            placeholderTextColor={T.textSoft}
             value={email}
             editable={false}
             keyboardType="email-address"
@@ -175,6 +185,7 @@ const ProfileSettingsClient = ({navigation}) => {
           <Text style={styles.label}>Contact Number</Text>
           <TextInput
             style={styles.input}
+            placeholderTextColor={T.textSoft}
             value={phone}
             onChangeText={setPhone}
             keyboardType="phone-pad"
@@ -184,6 +195,7 @@ const ProfileSettingsClient = ({navigation}) => {
           <Text style={styles.label}>Age</Text>
           <TextInput
             style={styles.input}
+            placeholderTextColor={T.textSoft}
             value={age}
             onChangeText={setAge}
             keyboardType="number-pad"
@@ -195,6 +207,7 @@ const ProfileSettingsClient = ({navigation}) => {
               <Text style={styles.label}>Guardian Full Name</Text>
               <TextInput
                 style={styles.input}
+                placeholderTextColor={T.textSoft}
                 value={guardianName}
                 onChangeText={setGuardianName}
                 placeholder="Parent/Guardian Name"
@@ -202,6 +215,7 @@ const ProfileSettingsClient = ({navigation}) => {
               <Text style={styles.label}>Guardian Contact Number</Text>
               <TextInput
                 style={styles.input}
+                placeholderTextColor={T.textSoft}
                 value={guardianContact}
                 onChangeText={setGuardianContact}
                 placeholder="09171234567"
@@ -213,6 +227,7 @@ const ProfileSettingsClient = ({navigation}) => {
           <Text style={styles.label}>Address</Text>
           <TextInput
             style={[styles.input, styles.multilineInput]}
+            placeholderTextColor={T.textSoft}
             value={address}
             onChangeText={setAddress}
             placeholder="Street, City"
@@ -228,40 +243,39 @@ const ProfileSettingsClient = ({navigation}) => {
             </TouchableOpacity>
           </View>
         </View>
+        </ClientFadeIn>
       </ScrollView>
-    </SafeAreaView>
+    </ClientScreenShell>
   );
 };
 
 export default ProfileSettingsClient;
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
   header: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
+    paddingHorizontal: 16,
+    paddingTop: 8,
     paddingBottom: 14,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(18, 26, 36, 0.75)',
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: 'rgba(244, 215, 139, 0.12)',
   },
-  backButton: {
-    alignSelf: 'flex-start',
-    paddingVertical: 6,
-    marginBottom: 4,
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 44,
   },
-  backText: {
-    color: '#EAB308',
-    fontSize: 16,
-    fontWeight: '600',
+  headerSide: {
+    width: 40,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
   },
-  headerTitle: {
-    fontSize: 24,
+  headerTitleCenter: {
+    flex: 1,
+    fontSize: 18,
     fontWeight: '700',
-    color: '#0F1E36',
+    color: T.text,
+    textAlign: 'center',
   },
   content: {
     padding: 20,
@@ -270,38 +284,37 @@ const styles = StyleSheet.create({
   loadingCard: {
     padding: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(244, 215, 139, 0.12)',
     borderRadius: 10,
     marginBottom: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(18, 26, 36, 0.62)',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  loadingText: {fontSize: 13, color: '#64748B'},
+  loadingText: {fontSize: 13, color: T.textSoft},
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(18, 26, 36, 0.88)',
     borderRadius: 18,
     padding: 20,
     marginBottom: 14,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    shadowOffset: {width: 0, height: 6},
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(244, 215, 139, 0.12)',
   },
   avatar: {
     width: 84,
     height: 84,
     borderRadius: 42,
     alignSelf: 'center',
-    backgroundColor: '#0F1E36',
+    backgroundColor: 'rgba(4, 7, 11, 0.8)',
+    borderWidth: 2,
+    borderColor: 'rgba(244, 215, 139, 0.25)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 10,
   },
   avatarText: {
-    color: '#fff',
+    color: T.gold[0],
     fontSize: 30,
     fontWeight: '700',
   },
@@ -309,39 +322,39 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 18,
     fontWeight: '700',
-    color: '#0F1E36',
+    color: T.text,
   },
   email: {
     textAlign: 'center',
     fontSize: 14,
-    color: '#64748B',
+    color: T.textSoft,
     marginTop: 4,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#0F1E36',
+    color: T.gold[0],
     marginBottom: 14,
   },
   label: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#475569',
+    color: T.textSoft,
     marginBottom: 6,
   },
   input: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: 'rgba(4, 7, 11, 0.45)',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(244, 215, 139, 0.15)',
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
     marginBottom: 14,
-    color: '#0F1E36',
+    color: T.text,
   },
   disabledInput: {
-    backgroundColor: '#EEF2F7',
-    color: '#64748B',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    color: T.textSoft,
   },
   multilineInput: {
     minHeight: 82,
@@ -349,13 +362,13 @@ const styles = StyleSheet.create({
   },
   saveButton: {
     flex: 1,
-    backgroundColor: '#0F1E36',
+    backgroundColor: T.gold[1],
     borderRadius: 12,
     paddingVertical: 15,
     alignItems: 'center',
   },
   saveButtonText: {
-    color: '#FFFFFF',
+    color: T.base,
     fontSize: 16,
     fontWeight: '700',
   },
@@ -368,12 +381,12 @@ const styles = StyleSheet.create({
     width: 110,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: 'rgba(244, 215, 139, 0.25)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   cancelButtonText: {
-    color: '#0F1E36',
+    color: T.text,
     fontSize: 15,
     fontWeight: '600',
   },

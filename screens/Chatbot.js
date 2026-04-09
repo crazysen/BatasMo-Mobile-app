@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, {useCallback, useRef, useState} from 'react';
 import {
   StyleSheet,
   View,
@@ -8,223 +8,295 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
+  Keyboard,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {MaterialCommunityIcons} from '@expo/vector-icons';
+import {REFERENCE_THEME as T} from '../constants/referenceTheme';
+import {ClientScreenShell} from '../components/ClientScreenShell';
+import ClientChevronBack from '../components/ClientChevronBack';
 
-const ChatbotScreen = ({ navigation }) => {
+const INITIAL_MESSAGES = [
+  {
+    id: '1',
+    text: 'Hello! I am your BatasMo AI assistant. How can I help you with your legal matters today?',
+    sender: 'ai',
+  },
+];
+
+export default function ChatbotScreen({navigation}) {
+  const insets = useSafeAreaInsets();
+  const listRef = useRef(null);
+  const [messages, setMessages] = useState(INITIAL_MESSAGES);
   const [inputText, setInputText] = useState('');
-  
-  // Mock data for the chat
-  const messages = [
-    { id: '1', text: 'Hello! I am your BatasMo AI assistant. How can I help you with your legal matters today?', sender: 'ai' },
-    { id: '2', text: 'I need help understanding some notarial fees for a property sale.', sender: 'user' },
-  ];
 
-  const handleBack = () => {
-    if (navigation && navigation.goBack) {
-      navigation.canGoBack() ? navigation.goBack() : null;
+  const handleBack = useCallback(() => {
+    if (navigation?.canGoBack?.()) {
+      navigation.goBack();
+      return;
     }
-  };
+    navigation.navigate('HomepageClient');
+  }, [navigation]);
 
-  const handleSendMessage = () => {
-    if (inputText.trim()) {
-      console.log('Sending:', inputText);
-      setInputText('');
+  const appendMessage = useCallback((text, sender) => {
+    const id = `m-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    setMessages(prev => [...prev, {id, text: text.trim(), sender}]);
+    setTimeout(() => listRef.current?.scrollToEnd({animated: true}), 80);
+  }, []);
+
+  const handleSendMessage = useCallback(() => {
+    const t = inputText.trim();
+    if (!t) {
+      return;
     }
-  };
+    Keyboard.dismiss();
+    appendMessage(t, 'user');
+    setInputText('');
+    setTimeout(() => {
+      appendMessage(
+        'Thanks for your message. A fuller AI legal assistant is coming soon — for urgent matters, use Book an Appointment to reach verified counsel.',
+        'ai',
+      );
+    }, 600);
+  }, [inputText, appendMessage]);
 
-  const handleQuickReply = (text) => {
-    console.log('Quick reply:', text);
-  };
+  const handleQuickReply = useCallback(
+    title => {
+      appendMessage(title, 'user');
+      setTimeout(() => {
+        appendMessage(
+          'I can help point you to the right area of the app. Try Notifications for request status, or Book an Appointment from your dashboard.',
+          'ai',
+        );
+      }, 500);
+    },
+    [appendMessage],
+  );
 
-  const QuickReply = ({ title }) => (
-    <TouchableOpacity 
-      style={styles.chip}
-      onPress={() => handleQuickReply(title)}
-      activeOpacity={0.7}
-    >
+  const renderMessage = useCallback(
+    ({item}) => (
+      <View
+        style={[styles.messageRow, item.sender === 'user' ? styles.userRow : styles.aiRow]}>
+        {item.sender === 'ai' ? (
+          <View style={styles.aiAvatarSmall}>
+            <MaterialCommunityIcons name="robot-outline" size={18} color={T.gold[0]} />
+          </View>
+        ) : null}
+        <View style={[styles.bubble, item.sender === 'user' ? styles.userBubble : styles.aiBubble]}>
+          <Text style={[styles.messageText, item.sender === 'ai' ? styles.aiText : styles.userText]}>
+            {item.text}
+          </Text>
+        </View>
+      </View>
+    ),
+    [],
+  );
+
+  const QuickReply = ({title}) => (
+    <TouchableOpacity style={styles.chip} onPress={() => handleQuickReply(title)} activeOpacity={0.7}>
       <Text style={styles.chipText}>{title}</Text>
     </TouchableOpacity>
   );
 
-  const renderMessage = ({ item }) => (
-    <View style={[styles.messageRow, item.sender === 'user' ? styles.userRow : styles.aiRow]}>
-      {item.sender === 'ai' && (
-        <View style={styles.aiAvatarSmall}>
-          <Text style={{ fontSize: 12 }}>🤖</Text>
-        </View>
-      )}
-      <View style={[styles.bubble, item.sender === 'user' ? styles.userBubble : styles.aiBubble]}>
-        <Text style={[styles.messageText, item.sender === 'ai' ? styles.aiText : styles.userText]}>
-          {item.text}
-        </Text>
-      </View>
-    </View>
-  );
-
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={handleBack}>
-          <Text style={styles.backArrow}>‹</Text>
-        </TouchableOpacity>
-        <View style={styles.aiAvatarHeader}>
-          <Text style={{ fontSize: 18 }}>🤖</Text>
-        </View>
-        <View style={styles.headerTitleContainer}>
-          <Text style={styles.headerTitle}>BatasMo AI Assistant</Text>
-          <View style={styles.statusContainer}>
-            <View style={styles.statusDot} />
-            <Text style={styles.statusText}>ALWAYS ONLINE</Text>
+    <ClientScreenShell edges={['top', 'left', 'right']}>
+      <View style={styles.fill}>
+        <View style={styles.header}>
+          <ClientChevronBack style={styles.backHit} onPress={handleBack} />
+          <View style={styles.aiAvatarHeader}>
+            <MaterialCommunityIcons name="robot-outline" size={22} color={T.gold[0]} />
+          </View>
+          <View style={styles.headerTitleContainer}>
+            <Text style={styles.headerTitle}>BatasMo AI Assistant</Text>
+            <View style={styles.statusContainer}>
+              <View style={styles.statusDot} />
+              <Text style={styles.statusText}>ALWAYS ONLINE</Text>
+            </View>
           </View>
         </View>
-      </View>
 
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
-        style={{ flex: 1 }}
-      >
-        {/* Encrypted Note */}
-        <View style={styles.encryptionNote}>
-          <Text style={styles.encryptionText}>Your session is encrypted and secure.</Text>
-        </View>
-
-        <FlatList
-          data={messages}
-          renderItem={renderMessage}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.chatList}
-        />
-
-        {/* Footer & Input */}
-        <View style={styles.footer}>
-          <View style={styles.quickReplies}>
-            <QuickReply title="Track my request" />
-            <QuickReply title="Find a lawyer" />
-            <QuickReply title="Notarial fee" />
-          </View>
-
-          <View style={styles.inputContainer}>
-            <TextInput
-              style={styles.input}
-              placeholder="Ask me anything..."
-              placeholderTextColor="#64748B"
-              value={inputText}
-              onChangeText={setInputText}
+        <KeyboardAvoidingView
+          style={styles.fill}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}>
+          <View style={styles.fill}>
+            <FlatList
+              ref={listRef}
+              style={styles.messagesList}
+              data={messages}
+              renderItem={renderMessage}
+              keyExtractor={item => item.id}
+              contentContainerStyle={styles.chatList}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+              onContentSizeChange={() => listRef.current?.scrollToEnd({animated: false})}
+              ListHeaderComponent={
+                <View style={styles.encryptionNote}>
+                  <Text style={styles.encryptionText}>Your session is encrypted and secure.</Text>
+                </View>
+              }
             />
-            <TouchableOpacity 
-              style={styles.sendButton}
-              onPress={handleSendMessage}
-              activeOpacity={0.8}
-            >
-              <Text style={{ fontSize: 18 }}>➤</Text>
-            </TouchableOpacity>
+
+            <View
+              style={[
+                styles.footer,
+                {paddingBottom: Math.max(insets.bottom, 12)},
+              ]}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.quickReplies}>
+                <QuickReply title="Track my request" />
+                <QuickReply title="Find a lawyer" />
+                <QuickReply title="Notarial fee" />
+              </ScrollView>
+
+              <View style={styles.inputContainer}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Ask me anything..."
+                  placeholderTextColor={T.textSoft}
+                  value={inputText}
+                  onChangeText={setInputText}
+                  onSubmitEditing={handleSendMessage}
+                  returnKeyType="send"
+                />
+                <TouchableOpacity
+                  style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
+                  onPress={handleSendMessage}
+                  activeOpacity={0.85}
+                  disabled={!inputText.trim()}>
+                  <MaterialCommunityIcons name="send" size={22} color={T.base} />
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
-        </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+        </KeyboardAvoidingView>
+      </View>
+    </ClientScreenShell>
   );
-};
+}
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#020617' },
+  fill: {flex: 1},
+  messagesList: {flex: 1},
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#1E293B',
+    borderBottomColor: 'rgba(244, 215, 139, 0.12)',
+    backgroundColor: 'rgba(18, 26, 36, 0.55)',
   },
-  backArrow: { color: '#F8FAFC', fontSize: 32, marginRight: 16 },
+  backHit: {marginRight: 8},
   aiAvatarHeader: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#1E293B',
+    backgroundColor: 'rgba(4, 7, 11, 0.55)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: 'rgba(244, 215, 139, 0.2)',
   },
-  headerTitleContainer: { marginLeft: 12 },
-  headerTitle: { color: '#F8FAFC', fontSize: 18, fontWeight: '700' },
-  statusContainer: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
-  statusDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#22C55E', marginRight: 6 },
-  statusText: { color: '#94A3B8', fontSize: 10, fontWeight: '800' },
-  
+  headerTitleContainer: {marginLeft: 12, flex: 1},
+  headerTitle: {color: T.text, fontSize: 17, fontWeight: '700'},
+  statusContainer: {flexDirection: 'row', alignItems: 'center', marginTop: 2},
+  statusDot: {width: 8, height: 8, borderRadius: 4, backgroundColor: '#22C55E', marginRight: 6},
+  statusText: {color: T.textSoft, fontSize: 10, fontWeight: '800'},
+
   encryptionNote: {
     alignSelf: 'center',
-    backgroundColor: '#0F172A',
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
     paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     borderRadius: 12,
-    marginTop: 20,
+    marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#1E293B',
+    borderColor: 'rgba(96, 165, 250, 0.25)',
   },
-  encryptionText: { color: '#94A3B8', fontSize: 12 },
+  encryptionText: {color: '#93C5FD', fontSize: 12, textAlign: 'center'},
 
-  chatList: { padding: 16 },
-  messageRow: { flexDirection: 'row', marginBottom: 20, alignItems: 'flex-end' },
-  userRow: { justifyContent: 'flex-end' },
-  aiRow: { justifyContent: 'flex-start' },
+  chatList: {paddingHorizontal: 16, paddingBottom: 16, flexGrow: 1},
+  messageRow: {flexDirection: 'row', marginBottom: 14, alignItems: 'flex-end'},
+  userRow: {justifyContent: 'flex-end'},
+  aiRow: {justifyContent: 'flex-start'},
   aiAvatarSmall: {
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: '#1E293B',
+    backgroundColor: 'rgba(18, 26, 36, 0.9)',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(244, 215, 139, 0.15)',
   },
-  bubble: { maxWidth: '80%', padding: 16, borderRadius: 24 },
-  aiBubble: { 
-    backgroundColor: '#F1F5F9', 
-    borderBottomLeftRadius: 4 
+  bubble: {maxWidth: '82%', paddingVertical: 12, paddingHorizontal: 14, borderRadius: 18},
+  aiBubble: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderBottomLeftRadius: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(244, 215, 139, 0.12)',
   },
-  userBubble: { 
-    backgroundColor: '#1E293B', 
+  userBubble: {
+    backgroundColor: 'rgba(244, 215, 139, 0.2)',
     borderBottomRightRadius: 4,
     borderWidth: 1,
-    borderColor: '#334155'
+    borderColor: 'rgba(244, 215, 139, 0.22)',
   },
-  messageText: { fontSize: 15, lineHeight: 22 },
-  aiText: { color: '#1E293B' },
-  userText: { color: '#F8FAFC' },
+  messageText: {fontSize: 15, lineHeight: 22},
+  aiText: {color: T.text},
+  userText: {color: T.base},
 
-  footer: { padding: 16, backgroundColor: '#020617' },
-  quickReplies: { flexDirection: 'row', marginBottom: 16 },
-  chip: {
-    backgroundColor: '#0F172A',
-    borderWidth: 1,
-    borderColor: '#334155',
-    paddingVertical: 10,
+  footer: {
+    paddingTop: 12,
     paddingHorizontal: 16,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(244, 215, 139, 0.12)',
+    backgroundColor: 'rgba(4, 7, 11, 0.45)',
+  },
+  quickReplies: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingBottom: 12,
+  },
+  chip: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(244, 215, 139, 0.18)',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
     borderRadius: 20,
     marginRight: 8,
   },
-  chipText: { color: '#F8FAFC', fontSize: 13, fontWeight: '500' },
-  inputContainer: { flexDirection: 'row', alignItems: 'center' },
+  chipText: {color: T.textMuted, fontSize: 13, fontWeight: '500'},
+  inputContainer: {flexDirection: 'row', alignItems: 'center'},
   input: {
     flex: 1,
-    backgroundColor: '#0F172A',
-    height: 54,
-    borderRadius: 27,
-    paddingHorizontal: 20,
-    color: '#F8FAFC',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    minHeight: 48,
+    maxHeight: 120,
+    borderRadius: 24,
+    paddingHorizontal: 18,
+    paddingVertical: Platform.OS === 'ios' ? 12 : 10,
+    color: T.text,
     fontSize: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(244, 215, 139, 0.12)',
   },
   sendButton: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: '#FACC15',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: T.gold[1],
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 12,
+    marginLeft: 10,
+  },
+  sendButtonDisabled: {
+    backgroundColor: 'rgba(148, 163, 184, 0.35)',
   },
 });
-
-export default ChatbotScreen;
-

@@ -1,208 +1,274 @@
+/**
+ * Client drawer aligned with github.com/rxasrn/mobile_client_side (screens/Sidebar.js).
+ * Rotating dashed ring lives on dashboard cards (KineticClientCard), not in this menu.
+ */
 import React from 'react';
 import {
   Alert,
+  Dimensions,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { signOutCurrentUser } from '../services/authService';
+import * as Haptics from 'expo-haptics';
+import {Feather, MaterialCommunityIcons} from '@expo/vector-icons';
+import {LinearGradient} from 'expo-linear-gradient';
+import {signOutCurrentUser} from '../services/authService';
+import {REFERENCE_THEME as T} from '../constants/referenceTheme';
+import {ClientScreenShell} from '../components/ClientScreenShell';
 
-const menuItems = [
-  {name: 'Dashboard', icon: '🏠', route: 'HomepageClient'},
-  {name: 'Book Appointment', icon: '📅', route: 'BookAppointment'},
-  {name: 'My Appointments', icon: '🗂️', route: 'MyAppointments'},
-  {name: 'Notarial Requests', icon: '📄', route: 'ClientNotarial'},
-  {name: 'Announcements', icon: '📢', route: 'ClientNotification'},
-  {name: 'Transaction History', icon: '🧾', route: 'TransactionHistory'},
-  {name: 'Profile', icon: '👤', route: 'ProfileSettingsClient'},
+const {width, height} = Dimensions.get('window');
+
+const DANGER = '#E74C3C';
+const DANGER_DARK = '#962D22';
+
+const INACTIVE_DIAMOND = ['#2A394B', '#121A25'];
+
+const menuRoutes = [
+  {label: 'Dashboard', icon: 'view-dashboard', route: 'HomepageClient'},
+  {label: 'Book Appointment', icon: 'calendar-check', route: 'BookAppointment'},
+  {label: 'My Appointments', icon: 'folder-account', route: 'MyAppointments'},
+  {label: 'Notarial Requests', icon: 'file-certificate', route: 'ClientNotarial'},
+  {label: 'Announcements', icon: 'bullhorn', route: 'ClientNotification'},
+  {label: 'Transaction History', icon: 'history', route: 'TransactionHistory'},
+  {label: 'Profile', icon: 'account-circle', route: 'ProfileSettingsClient'},
 ];
+
+function SidebarItem({icon, label, isActive, isLogout, onPress}) {
+  const gradientColors = isLogout
+    ? [DANGER, DANGER_DARK]
+    : isActive
+      ? T.gold
+      : INACTIVE_DIAMOND;
+
+  const iconColor =
+    isLogout || isActive ? T.base : T.gold[1];
+
+  return (
+    <TouchableOpacity
+      onPress={() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+        onPress?.();
+      }}
+      style={[styles.navItem, isActive && !isLogout && styles.navItemActive]}
+      activeOpacity={0.7}>
+      <View style={styles.navIconContainer}>
+        <LinearGradient colors={gradientColors} style={styles.navIconDiamond}>
+          <View style={styles.iconCounterRotate}>
+            <MaterialCommunityIcons name={icon} size={18} color={iconColor} />
+          </View>
+        </LinearGradient>
+      </View>
+      <Text
+        style={[
+          styles.navLabel,
+          isActive && !isLogout && styles.navLabelActive,
+          isLogout && styles.navLabelLogout,
+        ]}>
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+}
 
 export default function ClientMenu({navigation, route}) {
   const stackState = navigation.getState();
   const previousRouteName =
-    stackState?.routes?.[Math.max(0, (stackState?.index ?? 0) - 1)]?.name ??
-    'HomepageClient';
+    stackState?.routes?.[Math.max(0, (stackState?.index ?? 0) - 1)]?.name ?? 'HomepageClient';
   const activeRoute = route?.params?.activeRoute || previousRouteName;
 
-  const onMenuPress = item => {
-    if (item.route) {
-      navigation.navigate(item.route);
-      return;
+  const go = r => {
+    if (r) {
+      navigation.navigate(r);
     }
+  };
 
-    Alert.alert(item.name, `${item.name} will open here soon.`);
+  const handleClose = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    }
   };
 
   const handleLogout = () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Logout', 
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await signOutCurrentUser();
-            } catch {
-              // still leave app
-            }
-            navigation.reset({
-              index: 0,
-              routes: [{ name: 'Landing' }],
-            });
-          },
+    Alert.alert('Logout', 'Are you sure you want to logout?', [
+      {text: 'Cancel', style: 'cancel'},
+      {
+        text: 'Logout',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await signOutCurrentUser();
+          } catch {
+            // still leave app
+          }
+          navigation.reset({
+            index: 0,
+            routes: [{name: 'Landing'}],
+          });
         },
-      ]
-    );
+      },
+    ]);
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.drawerContent}>
-        <View style={styles.headerRow}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.canGoBack() ? navigation.goBack() : null}>
-            <Text style={styles.backText}>← Back</Text>
-          </TouchableOpacity>
-        </View>
+    <ClientScreenShell>
+      <View style={styles.panelOuter}>
+        <View
+          style={[
+            styles.sidebarContainer,
+            {width: Math.min(width * 0.92, width - 24), minHeight: height * 0.88},
+          ]}>
+          <LinearGradient
+            colors={['rgba(244, 215, 139, 0.25)', 'rgba(255, 255, 255, 0.05)']}
+            style={styles.sidebarGlassBorder}>
+            <View style={styles.sidebarContent}>
+              <View style={styles.sidebarHeader}>
+                <View style={styles.brandWrap}>
+                  <Image
+                    source={require('../assets/images/logo.jpg')}
+                    style={styles.brandLogo}
+                    resizeMode="cover"
+                  />
+                  <Text style={styles.brandText}>BatasMo</Text>
+                </View>
+                <TouchableOpacity onPress={handleClose} hitSlop={{top: 12, bottom: 12, left: 12, right: 12}}>
+                  <Feather name="chevron-left" size={24} color={T.gold[0]} />
+                </TouchableOpacity>
+              </View>
 
-        <View style={styles.logoContainer}>
-          <Text style={styles.logoIcon}>⚖️</Text>
-          <Text style={styles.logoText}>BatasMo</Text>
-        </View>
+              <ScrollView
+                style={styles.navScrollFlex}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.navScroll}>
+                {menuRoutes.map(item => (
+                  <SidebarItem
+                    key={item.route}
+                    icon={item.icon}
+                    label={item.label}
+                    isActive={activeRoute === item.route}
+                    onPress={() => go(item.route)}
+                  />
+                ))}
+              </ScrollView>
 
-        <View style={styles.divider} />
-
-        <ScrollView style={styles.navContainer} showsVerticalScrollIndicator={false}>
-          {menuItems.map(item => {
-            const isActive = activeRoute === item.route;
-            return (
-              <TouchableOpacity
-                key={item.name}
-                style={[styles.navItem, isActive && styles.activeNavItem]}
-                onPress={() => onMenuPress(item)}>
-                <Text style={styles.navIcon}>{item.icon}</Text>
-                <Text style={[styles.navText, isActive && styles.activeNavText]}>
-                  {item.name}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-
-        <View style={styles.logoutSection}>
-          <View style={styles.divider} />
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Text style={styles.logoutIcon}>🚪</Text>
-            <Text style={styles.logoutText}>Logout</Text>
-          </TouchableOpacity>
+              <View style={styles.sidebarFooter}>
+                <SidebarItem icon="door-open" label="Logout" isLogout onPress={handleLogout} />
+              </View>
+            </View>
+          </LinearGradient>
         </View>
       </View>
-    </SafeAreaView>
+    </ClientScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  panelOuter: {
     flex: 1,
-    backgroundColor: '#1E1E2C',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
   },
-  drawerContent: {
+  sidebarContainer: {
+    borderRadius: 35,
+    overflow: 'hidden',
+    elevation: 25,
+    shadowColor: 'rgba(212, 175, 55, 0.22)',
+    shadowOpacity: 0.22,
+    shadowRadius: 26,
+    shadowOffset: {width: 0, height: 10},
+  },
+  sidebarGlassBorder: {
     flex: 1,
-    paddingTop: 10,
+    padding: 1.5,
+    borderRadius: 35,
   },
-  headerRow: {
-    paddingHorizontal: 16,
-    marginBottom: 6,
+  sidebarContent: {
+    flex: 1,
+    backgroundColor: 'rgba(18, 26, 36, 0.85)',
+    borderRadius: 33,
+    padding: 20,
   },
-  backButton: {
-    alignSelf: 'flex-start',
-    paddingVertical: 6,
-    paddingHorizontal: 8,
+  sidebarHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+    paddingTop: 6,
   },
-  backText: {
-    color: '#EAB308',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  logoContainer: {
+  brandWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
   },
-  logoIcon: {
-    fontSize: 28,
-    marginRight: 10,
+  brandLogo: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(244, 215, 139, 0.35)',
   },
-  logoText: {
-    color: '#FFF',
-    fontSize: 24,
-    fontWeight: '800',
+  brandText: {
+    color: T.text,
+    fontSize: 20,
+    fontWeight: '900',
+    marginLeft: 10,
+    letterSpacing: -0.5,
   },
-  divider: {
-    height: 1,
-    backgroundColor: '#2D2D3F',
-    marginHorizontal: 10,
-    marginBottom: 18,
+  navScrollFlex: {
+    flex: 1,
   },
-  navContainer: {
-    paddingHorizontal: 10,
+  navScroll: {
+    paddingBottom: 12,
+    flexGrow: 1,
   },
   navItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 15,
-    borderRadius: 12,
+    paddingVertical: 12,
     marginBottom: 8,
-  },
-  activeNavItem: {
-    backgroundColor: '#EAB308',
-  },
-  navIcon: {
-    fontSize: 20,
-    width: 28,
-    textAlign: 'center',
-  },
-  navText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#94A3B8',
-    marginLeft: 15,
-  },
-  activeNavText: {
-    color: '#111827',
-    fontWeight: '700',
-  },
-  logoutSection: {
+    borderRadius: 15,
     paddingHorizontal: 10,
-    paddingBottom: 20,
   },
-  logoutButton: {
-    flexDirection: 'row',
+  navItemActive: {
+    backgroundColor: 'rgba(244, 215, 139, 0.1)',
+  },
+  navIconContainer: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 15,
-    borderRadius: 12,
-    backgroundColor: '#DC2626',
-    marginTop: 12,
   },
-  logoutIcon: {
-    fontSize: 20,
-    width: 28,
-    textAlign: 'center',
+  navIconDiamond: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    transform: [{rotate: '45deg'}],
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  logoutText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FFFFFF',
+  iconCounterRotate: {
+    transform: [{rotate: '-45deg'}],
+  },
+  navLabel: {
+    color: T.textSoft,
+    fontSize: 15,
+    fontWeight: '600',
     marginLeft: 15,
+  },
+  navLabelActive: {
+    color: T.gold[0],
+    fontWeight: '800',
+  },
+  navLabelLogout: {
+    color: DANGER,
+    fontWeight: '700',
+  },
+  sidebarFooter: {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.05)',
+    paddingTop: 15,
   },
 });

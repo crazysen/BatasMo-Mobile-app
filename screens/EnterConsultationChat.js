@@ -14,7 +14,10 @@ import {
   Modal,
 } from 'react-native';
 import {useFocusEffect} from '@react-navigation/native';
-import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {REFERENCE_THEME as T} from '../constants/referenceTheme';
+import {ClientScreenShell} from '../components/ClientScreenShell';
+import ClientChevronBack from '../components/ClientChevronBack';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import ChatMessageBody from '../components/ChatMessageBody';
@@ -273,11 +276,12 @@ const ConsultationChat = ({navigation, route}) => {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+    <ClientScreenShell edges={['top', 'left', 'right']}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => (navigation.canGoBack() ? navigation.goBack() : null)}>
-            <Text style={styles.backArrow}>‹</Text>
-          </TouchableOpacity>
+          <ClientChevronBack
+            style={styles.backHit}
+            onPress={() => (navigation.canGoBack() ? navigation.goBack() : null)}
+          />
           <View style={styles.avatarPlaceholder}>
             <Text style={styles.avatarInitials}>{initials}</Text>
           </View>
@@ -338,11 +342,11 @@ const ConsultationChat = ({navigation, route}) => {
                 placeholder={isClosed ? 'Consultation closed' : `Message ${chatName}...`}
                 value={messageText}
                 onChangeText={setMessageText}
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor={T.textSoft}
                 editable={!isClosed}
               />
               {sending ? (
-                <ActivityIndicator style={{marginLeft: 12}} />
+                <ActivityIndicator style={{marginLeft: 12}} color={T.gold[1]} />
               ) : (
                 <TouchableOpacity
                   style={[styles.sendButton, (isClosed || !messageText.trim()) && styles.sendButtonDisabled]}
@@ -381,7 +385,7 @@ const ConsultationChat = ({navigation, route}) => {
             <TextInput
               style={styles.modalInput}
               placeholder="Feedback (optional)"
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor={T.textSoft}
               value={feedbackComment}
               onChangeText={setFeedbackComment}
               multiline
@@ -400,7 +404,7 @@ const ConsultationChat = ({navigation, route}) => {
                 onPress={handleFeedbackSubmit}
                 disabled={feedbackSubmitting}>
                 {feedbackSubmitting ? (
-                  <ActivityIndicator color="#FFF" />
+                  <ActivityIndicator color={T.base} />
                 ) : (
                   <Text style={styles.modalBtnPrimaryText}>Submit</Text>
                 )}
@@ -409,93 +413,94 @@ const ConsultationChat = ({navigation, route}) => {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </ClientScreenShell>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {flex: 1, backgroundColor: '#FFF'},
   keyboardAvoid: {flex: 1},
   messagesList: {flex: 1},
-  header: {flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9'},
-  backArrow: {fontSize: 32, marginRight: 12, color: '#0F172A'},
+  header: {flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(244, 215, 139, 0.12)', backgroundColor: 'rgba(18, 26, 36, 0.5)'},
+  backHit: {marginRight: 8},
   avatarPlaceholder: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#0F172A',
+    backgroundColor: 'rgba(4, 7, 11, 0.6)',
+    borderWidth: 1,
+    borderColor: 'rgba(244, 215, 139, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarInitials: {
-    color: '#FFF',
+    color: T.gold[0],
     fontWeight: 'bold',
     fontSize: 16,
   },
   headerInfo: {marginLeft: 12},
-  headerName: {fontWeight: 'bold', fontSize: 16},
-  headerStatus: {color: '#22C55E', fontSize: 10, fontWeight: 'bold'},
+  headerName: {fontWeight: 'bold', fontSize: 16, color: T.text},
+  headerStatus: {color: '#6EE7B7', fontSize: 10, fontWeight: 'bold'},
   chatList: {padding: 16, paddingBottom: 24},
-  encryptionBadge: {backgroundColor: '#F8FAFC', padding: 12, borderRadius: 8, marginBottom: 20},
-  encryptionText: {color: '#64748B', fontSize: 12, textAlign: 'center'},
-  aiBubble: {backgroundColor: '#F1F5F9', padding: 16, borderRadius: 16, borderBottomLeftRadius: 4, alignSelf: 'flex-start', maxWidth: '80%', marginBottom: 12},
-  userBubble: {backgroundColor: '#1E293B', padding: 16, borderRadius: 16, borderBottomRightRadius: 4, alignSelf: 'flex-end', maxWidth: '80%', marginBottom: 12},
-  messageText: {color: '#1E293B', lineHeight: 20},
-  userMessageText: {color: '#FFF', lineHeight: 20},
-  timestamp: {fontSize: 10, color: '#94A3B8', marginTop: 4},
-  userTimestamp: {fontSize: 10, color: '#94A3B8', marginTop: 4, textAlign: 'right'},
-  footer: {paddingTop: 16, paddingHorizontal: 16, borderTopWidth: 1, borderTopColor: '#F1F5F9'},
+  encryptionBadge: {backgroundColor: 'rgba(59, 130, 246, 0.12)', padding: 12, borderRadius: 8, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(96, 165, 250, 0.25)'},
+  encryptionText: {color: '#93C5FD', fontSize: 12, textAlign: 'center'},
+  aiBubble: {backgroundColor: 'rgba(255,255,255,0.08)', padding: 16, borderRadius: 16, borderBottomLeftRadius: 4, alignSelf: 'flex-start', maxWidth: '80%', marginBottom: 12, borderWidth: 1, borderColor: 'rgba(244, 215, 139, 0.1)'},
+  userBubble: {backgroundColor: 'rgba(244, 215, 139, 0.18)', padding: 16, borderRadius: 16, borderBottomRightRadius: 4, alignSelf: 'flex-end', maxWidth: '80%', marginBottom: 12},
+  messageText: {color: T.text, lineHeight: 20},
+  userMessageText: {color: T.base, lineHeight: 20},
+  timestamp: {fontSize: 10, color: T.textSoft, marginTop: 4},
+  userTimestamp: {fontSize: 10, color: T.textSoft, marginTop: 4, textAlign: 'right'},
+  footer: {paddingTop: 16, paddingHorizontal: 16, borderTopWidth: 1, borderTopColor: 'rgba(244, 215, 139, 0.12)', backgroundColor: 'rgba(4, 7, 11, 0.35)'},
   actionsRow: {marginBottom: 16},
-  actionChip: {flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#E2E8F0', marginRight: 8},
+  actionChip: {flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.06)', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(244, 215, 139, 0.15)', marginRight: 8},
   actionIcon: {marginRight: 6},
-  actionLabel: {fontSize: 12, color: '#475569'},
+  actionLabel: {fontSize: 12, color: T.textSoft},
   inputRow: {flexDirection: 'row', alignItems: 'center'},
-  input: {flex: 1, backgroundColor: '#F1F5F9', height: 48, borderRadius: 24, paddingHorizontal: 20, color: '#0F172A'},
-  inputDisabled: {backgroundColor: '#E2E8F0', color: '#94A3B8'},
-  sendButton: {backgroundColor: '#D9B041', width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center', marginLeft: 12},
-  sendButtonDisabled: {backgroundColor: '#CBD5E1'},
-  sendIcon: {color: 'white'},
-  closedBadge: {backgroundColor: '#FFF7ED', padding: 12, borderRadius: 8, marginBottom: 20, borderWidth: 1, borderColor: '#FED7AA'},
-  closedText: {color: '#C2410C', fontSize: 12, textAlign: 'center', fontWeight: 'bold'},
+  input: {flex: 1, backgroundColor: 'rgba(255,255,255,0.08)', height: 48, borderRadius: 24, paddingHorizontal: 20, color: T.text, borderWidth: 1, borderColor: 'rgba(244, 215, 139, 0.12)'},
+  inputDisabled: {backgroundColor: 'rgba(148, 163, 184, 0.2)', color: T.textSoft},
+  sendButton: {backgroundColor: T.gold[1], width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center', marginLeft: 12},
+  sendButtonDisabled: {backgroundColor: 'rgba(148, 163, 184, 0.35)'},
+  sendIcon: {color: T.base},
+  closedBadge: {backgroundColor: 'rgba(251, 191, 36, 0.12)', padding: 12, borderRadius: 8, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(251, 191, 36, 0.25)'},
+  closedText: {color: T.gold[0], fontSize: 12, textAlign: 'center', fontWeight: 'bold'},
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    backgroundColor: 'rgba(4, 7, 11, 0.65)',
     justifyContent: 'center',
     padding: 24,
   },
   modalCard: {
-    backgroundColor: '#FFF',
+    backgroundColor: 'rgba(18, 26, 36, 0.98)',
     borderRadius: 16,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#F1F5F9',
+    borderColor: 'rgba(244, 215, 139, 0.15)',
   },
-  modalTitle: {fontSize: 18, fontWeight: 'bold', color: '#0F172A', marginBottom: 6},
-  modalSubtitle: {fontSize: 13, color: '#64748B', marginBottom: 16},
+  modalTitle: {fontSize: 18, fontWeight: 'bold', color: T.text, marginBottom: 6},
+  modalSubtitle: {fontSize: 13, color: T.textSoft, marginBottom: 16},
   starRow: {flexDirection: 'row', justifyContent: 'center', marginBottom: 16},
   starHit: {paddingHorizontal: 4},
-  starGlyph: {fontSize: 36, color: '#E2E8F0'},
-  starGlyphActive: {color: '#D9B041'},
+  starGlyph: {fontSize: 36, color: 'rgba(255,255,255,0.15)'},
+  starGlyphActive: {color: T.gold[1]},
   modalInput: {
     minHeight: 80,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(244, 215, 139, 0.15)',
     borderRadius: 12,
     padding: 12,
     fontSize: 14,
-    color: '#0F172A',
+    color: T.text,
     textAlignVertical: 'top',
     marginBottom: 16,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: 'rgba(4, 7, 11, 0.45)',
   },
   modalActions: {flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center'},
   modalBtnSecondary: {
     paddingVertical: 12,
     paddingHorizontal: 16,
   },
-  modalBtnSecondaryText: {color: '#64748B', fontSize: 15, fontWeight: '600'},
+  modalBtnSecondaryText: {color: T.textSoft, fontSize: 15, fontWeight: '600'},
   modalBtnPrimary: {
-    backgroundColor: '#0F172A',
+    backgroundColor: T.gold[1],
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 24,
@@ -503,7 +508,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalBtnPrimarySpaced: {marginLeft: 12},
-  modalBtnPrimaryText: {color: '#FFF', fontSize: 15, fontWeight: '600'},
+  modalBtnPrimaryText: {color: T.base, fontSize: 15, fontWeight: '600'},
   modalBtnDisabled: {opacity: 0.6},
 });
 

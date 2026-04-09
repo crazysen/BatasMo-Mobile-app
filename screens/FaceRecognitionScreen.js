@@ -6,9 +6,16 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  ScrollView,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { createNotarialRequest } from '../services/notarialService';
+import { REFERENCE_THEME as T } from '../constants/referenceTheme';
+import { ClientScreenShell, ClientFadeIn } from '../components/ClientScreenShell';
+import ClientChevronBack from '../components/ClientChevronBack';
+
+const HEADER_BACK_COL = 28;
+const HEADER_BACK_GAP = 8;
+const SUBTITLE_INDENT = HEADER_BACK_COL + HEADER_BACK_GAP;
 
 export default function FaceRecognitionScreen({ navigation, route }) {
   const notarialData = route?.params?.notarialData || {};
@@ -18,7 +25,6 @@ export default function FaceRecognitionScreen({ navigation, route }) {
 
   const startScan = () => {
     setIsScanning(true);
-    // Simulate Face Scan Delay
     setTimeout(() => {
       setIsScanning(false);
       setScanComplete(true);
@@ -34,17 +40,16 @@ export default function FaceRecognitionScreen({ navigation, route }) {
     try {
       setSubmitting(true);
       
-      // The old flow created a service request here
-      // But now we create it, mark it depending on payment, and then go to payment.
-      // For now, let's create the Request so we have an ID for Payment.
-      
       const response = await createNotarialRequest(notarialData);
-      const createdRequest = response?.data || response;
+      const createdRequest = response?.data ?? response;
       const requestId = createdRequest?.id;
 
       if (!requestId) {
-          // If we can't fetch it, we can still proceed to payment but it might be unsafe.
-          console.warn('Failed to retrieve request ID from create API');
+        Alert.alert(
+          'Could not save request',
+          'We could not confirm your notarial request. Please check your connection and try again.',
+        );
+        return;
       }
 
       navigation.replace('BookingSummary', {
@@ -55,11 +60,11 @@ export default function FaceRecognitionScreen({ navigation, route }) {
               ? new Date(createdRequest.created_at).toLocaleDateString()
               : 'To be confirmed',
           time: '-',
-          amount: '₱4,000', // Mock amount or fetch from somewhere
+          amount: '₱4,000',
         },
         paymentContext: {
           sourceType: 'notarial',
-          sourceId: requestId, // will be updated to 'completed' or 'accepted' on payment success
+          sourceId: requestId,
         },
       });
     } catch (error) {
@@ -70,96 +75,124 @@ export default function FaceRecognitionScreen({ navigation, route }) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.canGoBack() ? navigation.goBack() : null}>
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
-        <View style={styles.headerTitleContainer}>
-          <Text style={styles.headerTitle}>Face Verification</Text>
-          <Text style={styles.headerSubtitle}>
-             Final verification step
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.content}>
-        <View style={styles.formCard}>
-          <Text style={styles.sectionTitle}>Face Recognition</Text>
-          <Text style={styles.instructionText}>
-            Position your face within the frame and click Start Scan to verify your identity.
-          </Text>
-
-          <View style={styles.cameraBox}>
-            {isScanning ? (
-              <View style={styles.scanningContainer}>
-                <ActivityIndicator size="large" color="#EAB308" />
-                <Text style={styles.scanningText}>Scanning face...</Text>
-              </View>
-            ) : scanComplete ? (
-              <View style={styles.successContainer}>
-                <Text style={styles.successIcon}>✓</Text>
-                <Text style={styles.successText}>Scan Complete!</Text>
-              </View>
-            ) : (
-              <TouchableOpacity style={styles.dummyCameraArea} onPress={startScan}>
-                <View style={styles.faceOutline} />
-                <Text style={styles.cameraText}>Tap to Start Scan</Text>
-              </TouchableOpacity>
-            )}
+    <ClientScreenShell>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <ClientFadeIn>
+        <View style={styles.header}>
+          <View style={styles.titleRow}>
+            <View style={styles.backColumn}>
+              <ClientChevronBack
+                onPress={() => (navigation.canGoBack() ? navigation.goBack() : null)}
+              />
+            </View>
+            <Text style={styles.headerTitle} numberOfLines={2}>
+              Face Verification
+            </Text>
           </View>
+          <Text style={styles.headerSubtitle}>Final verification step</Text>
+        </View>
 
-          {scanComplete ? (
-            <TouchableOpacity
-              style={styles.submitButton}
-              onPress={handleProceed}
-              disabled={submitting}>
-              {submitting ? (
-                <ActivityIndicator color="#FFF" />
+        <View style={styles.content}>
+          <View style={styles.formCard}>
+            <Text style={styles.sectionTitle}>Face Recognition</Text>
+            <Text style={styles.instructionText}>
+              Position your face within the frame and click Start Scan to verify your identity.
+            </Text>
+
+            <View style={styles.cameraBox}>
+              {isScanning ? (
+                <View style={styles.scanningContainer}>
+                  <ActivityIndicator size="large" color={T.gold[1]} />
+                  <Text style={styles.scanningText}>Scanning face...</Text>
+                </View>
+              ) : scanComplete ? (
+                <View style={styles.successContainer}>
+                  <Text style={styles.successIcon}>✓</Text>
+                  <Text style={styles.successText}>Scan Complete!</Text>
+                </View>
               ) : (
-                <Text style={styles.submitButtonText}>Proceed to Payment</Text>
+                <TouchableOpacity style={styles.dummyCameraArea} onPress={startScan}>
+                  <View style={styles.faceOutline} />
+                  <Text style={styles.cameraText}>Tap to Start Scan</Text>
+                </TouchableOpacity>
               )}
-            </TouchableOpacity>
-          ) : (
+            </View>
+
+            {scanComplete ? (
+              <TouchableOpacity
+                style={styles.submitButton}
+                onPress={handleProceed}
+                disabled={submitting}>
+                {submitting ? (
+                  <ActivityIndicator color={T.base} />
+                ) : (
+                  <Text style={styles.submitButtonText}>Proceed to Payment</Text>
+                )}
+              </TouchableOpacity>
+            ) : (
              <TouchableOpacity
              style={[styles.submitButton, styles.submitButtonDisabled]}
              disabled={true}>
              <Text style={styles.submitButtonText}>Proceed to Payment</Text>
            </TouchableOpacity>
-          )}
+            )}
+          </View>
         </View>
-      </View>
-    </SafeAreaView>
+        </ClientFadeIn>
+      </ScrollView>
+    </ClientScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
-  header: { padding: 20, flexDirection: 'row', alignItems: 'flex-start' },
-  backButton: { paddingVertical: 6, marginRight: 8 },
-  backText: { color: '#EAB308', fontWeight: '700', fontSize: 16 },
-  headerTitleContainer: { flex: 1 },
-  headerTitle: { fontSize: 22, fontWeight: '800', color: '#0F172A' },
-  headerSubtitle: { fontSize: 13, color: '#64748B' },
-  content: { padding: 20 },
-  formCard: {
-    backgroundColor: '#FFF',
-    borderRadius: 20,
-    padding: 20,
-    elevation: 2,
+  scroll: { paddingBottom: 32 },
+  header: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 16,
+  },
+  titleRow: {
+    flexDirection: 'row',
     alignItems: 'center',
   },
-  sectionTitle: { fontSize: 18, fontWeight: '700', color: '#0F172A', marginBottom: 10, alignSelf: 'flex-start' },
-  instructionText: { fontSize: 14, color: '#475569', marginBottom: 30, lineHeight: 20, alignSelf: 'flex-start' },
+  backColumn: {
+    width: HEADER_BACK_COL,
+    marginRight: HEADER_BACK_GAP,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+  },
+  headerTitle: {
+    flex: 1,
+    fontSize: 22,
+    fontWeight: '800',
+    color: T.text,
+    lineHeight: 28,
+  },
+  headerSubtitle: {
+    fontSize: 13,
+    color: T.textSoft,
+    marginTop: 6,
+    marginLeft: SUBTITLE_INDENT,
+    lineHeight: 18,
+  },
+  content: { padding: 20 },
+  formCard: {
+    backgroundColor: 'rgba(18, 26, 36, 0.88)',
+    borderRadius: 20,
+    padding: 20,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(244, 215, 139, 0.12)',
+  },
+  sectionTitle: { fontSize: 18, fontWeight: '700', color: T.gold[0], marginBottom: 10, alignSelf: 'flex-start' },
+  instructionText: { fontSize: 14, color: T.textMuted, marginBottom: 30, lineHeight: 20, alignSelf: 'flex-start' },
   cameraBox: {
     width: 250,
     height: 300,
     borderWidth: 2,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(244, 215, 139, 0.2)',
     borderRadius: 20,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: 'rgba(4, 7, 11, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 30,
@@ -175,26 +208,26 @@ const styles = StyleSheet.create({
     width: 120,
     height: 160,
     borderWidth: 3,
-    borderColor: '#94A3B8',
+    borderColor: T.textSoft,
     borderStyle: 'dashed',
     borderRadius: 60,
     marginBottom: 15,
   },
-  cameraText: { fontSize: 14, fontWeight: '600', color: '#64748B' },
+  cameraText: { fontSize: 14, fontWeight: '600', color: T.textSoft },
   scanningContainer: { alignItems: 'center' },
-  scanningText: { marginTop: 15, fontSize: 14, color: '#EAB308', fontWeight: '600' },
+  scanningText: { marginTop: 15, fontSize: 14, color: T.gold[0], fontWeight: '600' },
   successContainer: { alignItems: 'center' },
-  successIcon: { fontSize: 60, color: '#22C55E' },
-  successText: { fontSize: 18, color: '#22C55E', fontWeight: '700', marginTop: 10 },
+  successIcon: { fontSize: 60, color: '#6EE7B7' },
+  successText: { fontSize: 18, color: '#6EE7B7', fontWeight: '700', marginTop: 10 },
   submitButton: {
-    backgroundColor: '#0F172A',
+    backgroundColor: T.gold[1],
     borderRadius: 12,
     paddingVertical: 16,
     width: '100%',
     alignItems: 'center',
   },
   submitButtonDisabled: {
-    backgroundColor: '#94A3B8',
+    backgroundColor: 'rgba(148, 163, 184, 0.35)',
   },
-  submitButtonText: { color: '#FFF', fontWeight: '700', fontSize: 16 },
+  submitButtonText: { color: T.base, fontWeight: '700', fontSize: 16 },
 });

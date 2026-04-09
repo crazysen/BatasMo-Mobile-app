@@ -9,8 +9,10 @@ import {
   ActivityIndicator,
   Modal,
 } from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
 import {getFeedbackForAttorney} from '../services/consultationFeedbackService';
+import {REFERENCE_THEME as T} from '../constants/referenceTheme';
+import {ClientScreenShell, ClientFadeIn} from '../components/ClientScreenShell';
+import ClientChevronBack from '../components/ClientChevronBack';
 
 function StarRow({rating}) {
   const r = Math.min(5, Math.max(0, Math.round(Number(rating) || 0)));
@@ -139,12 +141,11 @@ const AttorneyProfile = ({navigation, route}) => {
   const ratingDisplay = avgRating.toFixed(1);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ClientScreenShell>
+      <ClientFadeIn>
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={styles.headerBackground}>
-          <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-            <Text style={styles.backIcon}>‹</Text>
-          </TouchableOpacity>
+          <ClientChevronBack style={styles.backButton} onPress={handleBack} />
 
           <View style={styles.profileImageContainer}>
             <Image source={{uri: attorney.image}} style={styles.profileImage} />
@@ -192,7 +193,7 @@ const AttorneyProfile = ({navigation, route}) => {
 
           {feedbackLoading ? (
             <View style={styles.feedbackLoading}>
-              <ActivityIndicator color="#EAB308" />
+              <ActivityIndicator color={T.gold[1]} />
               <Text style={styles.feedbackLoadingText}>Loading reviews…</Text>
             </View>
           ) : feedbackError ? (
@@ -232,29 +233,29 @@ const AttorneyProfile = ({navigation, route}) => {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+      </ClientFadeIn>
+    </ClientScreenShell>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {flex: 1, backgroundColor: '#FFFFFF'},
+  container: {flex: 1},
   headerBackground: {
-    backgroundColor: '#0F172A',
+    backgroundColor: 'rgba(18, 26, 36, 0.95)',
     paddingTop: 20,
     paddingBottom: 80,
     borderBottomLeftRadius: 40,
     borderBottomRightRadius: 40,
     alignItems: 'center',
   },
-  backButton: {position: 'absolute', left: 20, top: 20, zIndex: 10},
-  backIcon: {color: 'white', fontSize: 32},
+  backButton: {position: 'absolute', left: 16, top: 18, zIndex: 10},
   profileImageContainer: {marginTop: 20},
-  profileImage: {width: 120, height: 120, borderRadius: 60, borderWidth: 4, borderColor: '#1E293B'},
+  profileImage: {width: 120, height: 120, borderRadius: 60, borderWidth: 4, borderColor: 'rgba(244, 215, 139, 0.35)'},
   nameContainer: {alignItems: 'center', marginTop: 15},
   nameText: {color: 'white', fontSize: 24, fontWeight: 'bold', fontFamily: 'serif'},
   titleText: {color: '#94A3B8', fontSize: 16, marginTop: 4},
   prcText: {color: '#CBD5E1', fontSize: 13, marginTop: 4, fontStyle: 'italic'},
-  ratingText: {color: '#EAB308', marginTop: 8, fontWeight: 'bold'},
+  ratingText: {color: T.gold[0], marginTop: 8, fontWeight: 'bold'},
   statsOverlay: {
     flexDirection: 'row',
     position: 'absolute',
@@ -263,41 +264,45 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   statCard: {
-    backgroundColor: 'white',
+    backgroundColor: 'rgba(18, 26, 36, 0.92)',
     width: '31%',
     paddingVertical: 15,
     borderRadius: 15,
     alignItems: 'center',
     elevation: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(244, 215, 139, 0.15)',
     shadowColor: '#000',
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.2,
     shadowRadius: 10,
   },
-  statValue: {fontSize: 20, fontWeight: 'bold', color: '#0F172A'},
-  statLabel: {fontSize: 10, color: '#64748B', marginTop: 4, fontWeight: '800'},
+  statValue: {fontSize: 20, fontWeight: 'bold', color: T.text},
+  statLabel: {fontSize: 10, color: T.textSoft, marginTop: 4, fontWeight: '800'},
   contentPadding: {paddingHorizontal: 20, marginTop: 60},
-  sectionTitle: {fontSize: 22, fontWeight: 'bold', color: '#0F172A', fontFamily: 'serif', marginBottom: 12},
-  bioText: {color: '#64748B', lineHeight: 22, fontSize: 15},
+  sectionTitle: {fontSize: 22, fontWeight: 'bold', color: T.text, fontFamily: 'serif', marginBottom: 12},
+  bioText: {color: T.textMuted, lineHeight: 22, fontSize: 15},
   tagContainer: {flexDirection: 'row', flexWrap: 'wrap', marginTop: 15},
   tagBadge: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: 'rgba(244, 215, 139, 0.1)',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 20,
     marginRight: 8,
     marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(244, 215, 139, 0.15)',
   },
-  tagText: {color: '#475569', fontSize: 12, fontWeight: '600'},
+  tagText: {color: T.textSoft, fontSize: 12, fontWeight: '600'},
   feedbackHeader: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 25},
-  viewAll: {color: '#EAB308', fontWeight: 'bold', fontSize: 12},
+  viewAll: {color: T.gold[0], fontWeight: 'bold', fontSize: 12},
   feedbackScroll: {marginTop: 15, marginBottom: 100},
   feedbackCard: {
-    backgroundColor: 'white',
+    backgroundColor: 'rgba(18, 26, 36, 0.88)',
     width: 280,
     padding: 20,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#F1F5F9',
+    borderColor: 'rgba(244, 215, 139, 0.12)',
     marginRight: 15,
   },
   feedbackCardFull: {
@@ -306,16 +311,16 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   starRow: {flexDirection: 'row', marginBottom: 10},
-  starOn: {color: '#EAB308', fontSize: 16},
-  starOff: {color: '#E2E8F0', fontSize: 16},
-  feedbackText: {color: '#475569', fontStyle: 'italic', lineHeight: 20},
+  starOn: {color: T.gold[1], fontSize: 16},
+  starOff: {color: 'rgba(255,255,255,0.15)', fontSize: 16},
+  feedbackText: {color: T.textMuted, fontStyle: 'italic', lineHeight: 20},
   clientInfo: {flexDirection: 'row', alignItems: 'center', marginTop: 15},
   avatarPlaceholder: {width: 40, height: 40, borderRadius: 20, backgroundColor: '#E2E8F0', marginRight: 10},
-  clientName: {fontWeight: 'bold', color: '#0F172A'},
-  clientRole: {fontSize: 11, color: '#94A3B8'},
-  footer: {position: 'absolute', bottom: 0, width: '100%', padding: 20, backgroundColor: 'white'},
-  bookButton: {backgroundColor: '#EAB308', paddingVertical: 18, borderRadius: 15},
-  bookButtonText: {textAlign: 'center', color: 'white', fontWeight: 'bold', fontSize: 18},
+  clientName: {fontWeight: 'bold', color: T.text},
+  clientRole: {fontSize: 11, color: T.textSoft},
+  footer: {position: 'absolute', bottom: 0, width: '100%', padding: 20, backgroundColor: 'rgba(4, 7, 11, 0.92)', borderTopWidth: 1, borderTopColor: 'rgba(244, 215, 139, 0.12)'},
+  bookButton: {backgroundColor: T.gold[1], paddingVertical: 18, borderRadius: 15},
+  bookButtonText: {textAlign: 'center', color: T.base, fontWeight: 'bold', fontSize: 18},
   feedbackLoading: {paddingVertical: 24, alignItems: 'center'},
   feedbackLoadingText: {marginTop: 8, color: '#64748B', fontSize: 13},
   feedbackError: {color: '#B91C1C', marginTop: 8, fontSize: 13},
@@ -326,11 +331,13 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalSheet: {
-    backgroundColor: '#FFF',
+    backgroundColor: 'rgba(18, 26, 36, 0.98)',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: '85%',
     paddingBottom: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(244, 215, 139, 0.12)',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -339,10 +346,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: 'rgba(244, 215, 139, 0.1)',
   },
-  modalTitle: {fontSize: 18, fontWeight: 'bold', color: '#0F172A', fontFamily: 'serif'},
-  modalClose: {color: '#EAB308', fontWeight: '700', fontSize: 15},
+  modalTitle: {fontSize: 18, fontWeight: 'bold', color: T.text, fontFamily: 'serif'},
+  modalClose: {color: T.gold[0], fontWeight: '700', fontSize: 15},
   modalScroll: {paddingHorizontal: 20, paddingTop: 12},
 });
 

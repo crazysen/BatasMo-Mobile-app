@@ -8,7 +8,9 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
+import {REFERENCE_THEME as T} from '../constants/referenceTheme';
+import {ClientScreenShell, ClientFadeIn} from '../components/ClientScreenShell';
+import ClientChevronBack from '../components/ClientChevronBack';
 import {
   formatScheduledAtDisplay,
   getLatestRescheduleReason,
@@ -227,19 +229,22 @@ export default function ClientNotification({navigation}) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <TouchableOpacity style={styles.backButton} onPress={() => navigation.canGoBack() ? navigation.goBack() : null}>
-        <Text style={styles.backText}>← Back</Text>
-      </TouchableOpacity>
+    <ClientScreenShell>
+      <ClientFadeIn>
+      <ClientChevronBack
+        style={styles.backHit}
+        onPress={() => (navigation.canGoBack() ? navigation.goBack() : null)}
+      />
 
       <View style={styles.headerSection}>
         <Text style={styles.mainTitle}>Notifications</Text>
         <Text style={styles.subtitle}>Stay updated on your legal proceedings.</Text>
       </View>
+      </ClientFadeIn>
 
       {loading ? (
         <View style={styles.centerState}>
-          <ActivityIndicator color="#0F172A" />
+          <ActivityIndicator color={T.gold[1]} />
           <Text style={styles.centerStateText}>Loading notifications...</Text>
         </View>
       ) : notifications.length === 0 ? (
@@ -248,11 +253,13 @@ export default function ClientNotification({navigation}) {
         </View>
       ) : (
         <FlatList
+          style={styles.listFlex}
           data={notifications}
           keyExtractor={item => item.id}
           contentContainerStyle={styles.listPadding}
           showsVerticalScrollIndicator={false}
-          renderItem={({item}) => (
+          renderItem={({item, index}) => (
+            <ClientFadeIn delay={60 + index * 40}>
             <View style={styles.card}>
               <View style={[styles.iconContainer, {backgroundColor: item.iconBg}]}>
                 <Text style={styles.iconText}>{item.icon}</Text>
@@ -273,41 +280,34 @@ export default function ClientNotification({navigation}) {
                 ) : null}
               </View>
             </View>
+            </ClientFadeIn>
           )}
         />
       )}
-    </SafeAreaView>
+    </ClientScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {flex: 1, backgroundColor: '#F8FAFC'},
-  backButton: {
+  listFlex: {flex: 1},
+  backHit: {
     alignSelf: 'flex-start',
     marginLeft: 18,
     marginTop: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 8,
   },
-  backText: {color: '#EAB308', fontSize: 16, fontWeight: '700'},
   headerSection: {paddingHorizontal: 24, paddingTop: 8, paddingBottom: 18},
-  mainTitle: {fontSize: 32, fontWeight: '800', color: '#0F172A', marginBottom: 6},
-  subtitle: {fontSize: 15, color: '#64748B'},
+  mainTitle: {fontSize: 32, fontWeight: '800', color: T.text, marginBottom: 6},
+  subtitle: {fontSize: 15, color: T.textSoft},
   listPadding: {paddingHorizontal: 16, paddingBottom: 24},
   centerState: {flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20},
-  centerStateText: {marginTop: 8, color: '#64748B'},
+  centerStateText: {marginTop: 8, color: T.textSoft},
   card: {
-    backgroundColor: '#FFF',
+    backgroundColor: 'rgba(18, 26, 36, 0.88)',
     borderRadius: 22,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#F1F5F9',
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 4},
-    shadowOpacity: 0.03,
-    shadowRadius: 10,
-    elevation: 2,
+    borderColor: 'rgba(244, 215, 139, 0.12)',
     flexDirection: 'row',
   },
   iconContainer: {
@@ -330,10 +330,10 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     fontWeight: '700',
-    color: '#0F172A',
+    color: T.text,
     marginRight: 8,
   },
-  timeText: {fontSize: 11, color: '#94A3B8', fontWeight: '600'},
-  descriptionText: {fontSize: 14, color: '#64748B', lineHeight: 20, marginBottom: 8},
-  actionText: {fontSize: 14, fontWeight: '800', color: '#EAB308'},
+  timeText: {fontSize: 11, color: T.textSoft, fontWeight: '600'},
+  descriptionText: {fontSize: 14, color: T.textMuted, lineHeight: 20, marginBottom: 8},
+  actionText: {fontSize: 14, fontWeight: '800', color: T.gold[0]},
 });

@@ -11,7 +11,8 @@ import {
   Platform,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import {SafeAreaView} from 'react-native-safe-area-context';
+import {REFERENCE_THEME as T} from '../constants/referenceTheme';
+import {ClientScreenShell, ClientFadeIn} from '../components/ClientScreenShell';
 import {
   rescheduleAppointment,
   HOURLY_CONSULTATION_SLOT_LABELS,
@@ -206,7 +207,9 @@ export default function RescheduleAppointment({navigation, route}) {
   };
 
   return (
-    <SafeAreaView style={styles.overlay}>
+    <ClientScreenShell>
+      <View style={styles.overlay}>
+      <ClientFadeIn>
       <View style={styles.modalContainer}>
         <View style={styles.dragHandle} />
 
@@ -280,7 +283,7 @@ export default function RescheduleAppointment({navigation, route}) {
           <TextInput
             style={styles.textArea}
             placeholder="e.g. Schedule conflict, family emergency..."
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor={T.textSoft}
             multiline
             numberOfLines={4}
             value={reason}
@@ -299,7 +302,7 @@ export default function RescheduleAppointment({navigation, route}) {
             onPress={handleConfirm}
             disabled={submitting || selectableSlots.length === 0}>
             {submitting ? (
-              <ActivityIndicator color="#1E293B" />
+              <ActivityIndicator color={T.base} />
             ) : (
               <Text style={styles.confirmButtonText}>Confirm Reschedule</Text>
             )}
@@ -310,24 +313,28 @@ export default function RescheduleAppointment({navigation, route}) {
           </TouchableOpacity>
         </ScrollView>
       </View>
-    </SafeAreaView>
+      </ClientFadeIn>
+      </View>
+    </ClientScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end'},
+  overlay: {flex: 1, justifyContent: 'flex-end'},
   modalContainer: {
-    backgroundColor: 'white',
+    backgroundColor: 'rgba(18, 26, 36, 0.98)',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: 20,
     paddingBottom: 40,
     maxHeight: '90%',
+    borderWidth: 1,
+    borderColor: 'rgba(244, 215, 139, 0.15)',
   },
   dragHandle: {
     width: 45,
     height: 5,
-    backgroundColor: '#CBD5E1',
+    backgroundColor: 'rgba(244, 215, 139, 0.25)',
     borderRadius: 3,
     alignSelf: 'center',
     marginVertical: 12,
@@ -335,35 +342,35 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#0F172A',
+    color: T.text,
     marginBottom: 16,
   },
   infoBanner: {
     flexDirection: 'row',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: 'rgba(255,255,255,0.05)',
     padding: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#F1F5F9',
+    borderColor: 'rgba(244, 215, 139, 0.12)',
     alignItems: 'center',
     marginBottom: 24,
   },
-  infoIcon: {marginRight: 8, color: '#64748B'},
-  infoBannerText: {color: '#64748B', fontSize: 14, flex: 1},
+  infoIcon: {marginRight: 8, color: T.textSoft},
+  infoBannerText: {color: T.textMuted, fontSize: 14, flex: 1},
   sectionLabel: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#334155',
+    color: T.gold[0],
     marginBottom: 12,
   },
   timeHint: {
     fontSize: 13,
-    color: '#64748B',
+    color: T.textSoft,
     marginBottom: 10,
   },
   noSlotsText: {
     fontSize: 14,
-    color: '#B45309',
+    color: '#F87171',
     fontWeight: '600',
     marginBottom: 16,
   },
@@ -372,71 +379,74 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(244, 215, 139, 0.2)',
     borderRadius: 12,
     padding: 16,
     marginBottom: 24,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
   },
-  dateText: {fontSize: 16, color: '#0F172A', flex: 1},
+  dateText: {fontSize: 16, color: '#93C5FD', flex: 1},
   dateDoneBtn: {
     alignSelf: 'flex-end',
     paddingVertical: 8,
     paddingHorizontal: 12,
     marginBottom: 8,
   },
-  dateDoneText: {fontSize: 16, fontWeight: '700', color: '#1E293B'},
+  dateDoneText: {fontSize: 16, fontWeight: '700', color: T.gold[0]},
   calendarIcon: {fontSize: 16},
   timeGrid: {flexDirection: 'row', flexWrap: 'wrap', marginBottom: 24},
   timeChip: {
     width: '31%',
     paddingVertical: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(244, 215, 139, 0.15)',
     borderRadius: 10,
     alignItems: 'center',
     marginBottom: 10,
     marginRight: '2%',
+    backgroundColor: 'rgba(255,255,255,0.04)',
   },
-  timeChipSelected: {backgroundColor: '#1E293B', borderColor: '#1E293B'},
-  timeChipText: {color: '#1E293B', fontWeight: '500'},
-  timeChipTextSelected: {color: 'white'},
+  timeChipSelected: {backgroundColor: T.gold[1], borderColor: T.gold[1]},
+  timeChipText: {color: T.text, fontWeight: '500'},
+  timeChipTextSelected: {color: T.base},
   textArea: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: 'rgba(4, 7, 11, 0.45)',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(244, 215, 139, 0.15)',
     borderRadius: 12,
     padding: 16,
     height: 100,
     textAlignVertical: 'top',
     marginBottom: 24,
-    color: '#0F172A',
+    color: T.text,
   },
   policyBox: {
     flexDirection: 'row',
-    backgroundColor: '#EFF6FF',
+    backgroundColor: 'rgba(59, 130, 246, 0.12)',
     padding: 16,
     borderRadius: 12,
     marginBottom: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(96, 165, 250, 0.2)',
   },
-  policyIcon: {color: '#2563EB', fontWeight: 'bold', marginRight: 10},
-  policyText: {color: '#2563EB', fontSize: 13, flex: 1, fontWeight: '600', lineHeight: 18},
+  policyIcon: {color: '#93C5FD', fontWeight: 'bold', marginRight: 10},
+  policyText: {color: '#93C5FD', fontSize: 13, flex: 1, fontWeight: '600', lineHeight: 18},
   confirmButton: {
-    backgroundColor: '#EAB308',
+    backgroundColor: T.gold[1],
     paddingVertical: 18,
     borderRadius: 12,
     marginBottom: 12,
-    shadowColor: '#EAB308',
-    shadowOpacity: 0.3,
+    shadowColor: 'rgba(212, 175, 55, 0.45)',
+    shadowOpacity: 0.35,
     shadowOffset: {width: 0, height: 4},
-    shadowRadius: 6,
+    shadowRadius: 8,
   },
-  confirmButtonText: {color: '#0F172A', textAlign: 'center', fontWeight: 'bold', fontSize: 16},
+  confirmButtonText: {color: T.base, textAlign: 'center', fontWeight: 'bold', fontSize: 16},
   cancelButton: {
     paddingVertical: 18,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(244, 215, 139, 0.2)',
   },
-  cancelButtonText: {color: '#64748B', textAlign: 'center', fontWeight: '600'},
+  cancelButtonText: {color: T.textSoft, textAlign: 'center', fontWeight: '600'},
 });
