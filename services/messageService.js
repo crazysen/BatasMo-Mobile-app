@@ -1,5 +1,6 @@
 import { readAsStringAsync } from 'expo-file-system/legacy';
 import { supabase } from './supabaseClient';
+import { completeAppointmentAfterConsultationEnded } from './appointmentService';
 import { bucketForMessageType, validateAttachment } from './chatTypes';
 
 /**
@@ -85,6 +86,9 @@ function mapRow(row, roomId, isClosed, userId) {
   };
 }
 
+/**
+ * @returns {Promise<{ rows: ReturnType<typeof mapRow>[], isClosed: boolean }>}
+ */
 export async function getAppointmentMessages(appointmentId) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
@@ -113,14 +117,30 @@ export async function getAppointmentMessages(appointmentId) {
 
   if (error || !data) {
     const room = await getOrCreateRoom(appointmentId);
-    return [];
+    return {rows: [], isClosed: Boolean(room.is_closed)};
   }
 
   const list = (data.messages || []).slice().sort((a, b) =>
     String(a.created_at).localeCompare(String(b.created_at)),
   );
 
-  return list.map(row => mapRow(row, data.id, data.is_closed, user.id));
+  const isClosed = Boolean(data.is_closed);
+  const rows = list.map(row => mapRow(row, data.id, isClosed, user.id));
+  return {rows, isClosed};
+}
+
+/**
+ * Attorney-only (enforced by RLS). Sets consultation room to closed; no new messages allowed.
+ */
+export async function closeConsultationRoom(appointmentId) {
+  const room = await getOrCreateRoom(appointmentId);
+  const {error} = await supabase
+    .from('consultation_rooms')
+    .update({is_closed: true})
+    .eq('id', room.id);
+  if (error) throw new Error(error.message);
+
+  await completeAppointmentAfterConsultationEnded(appointmentId);
 }
 
 export async function sendAppointmentMessage(appointmentId, text) {
@@ -226,17 +246,21 @@ export async function getSignedUrlForMessage(msg) {
 }
 
 /**
- * Subscribe to new messages for an appointment's room. Calls onInsert with enriched row map.
+ * Subscribe to new messages and room closure updates.
+ * @param {string} appointmentId
+ * @param {{ onMessageInsert?: (mapped: ReturnType<typeof mapRow>) => void, onRoomUpdate?: (payload: { is_closed: boolean }) => void }} callbacks
  * @returns {Promise<() => void>}
  */
-export async function subscribeToRoomMessages(appointmentId, onInsert) {
-  const { data: { user } } = await supabase.auth.getUser();
+export async function subscribeToConsultationRoom(appointmentId, callbacks) {
+  const {data: {user}} = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
 
   const room = await getOrCreateRoom(appointmentId);
+  const onMessageInsert = callbacks?.onMessageInsert;
+  const onRoomUpdate = callbacks?.onRoomUpdate;
 
   const channel = supabase
-    .channel(`chat-room:${room.id}`)
+    .channel(`chat-room:${room.id}:sync`)
     .on(
       'postgres_changes',
       {
@@ -247,24 +271,46 @@ export async function subscribeToRoomMessages(appointmentId, onInsert) {
       },
       async payload => {
         const row = payload.new;
-        if (!row?.id) return;
+        if (!row?.id || !onMessageInsert) return;
 
-        const { data: prof } = await supabase
+        const {data: prof} = await supabase
           .from('profiles')
           .select('full_name')
           .eq('id', row.sender_id)
           .single();
 
+        const {data: roomRow} = await supabase
+          .from('consultation_rooms')
+          .select('is_closed')
+          .eq('id', room.id)
+          .single();
+
         const mapped = mapRow(
           {
             ...row,
-            sender: prof ? { full_name: prof.full_name } : null,
+            sender: prof ? {full_name: prof.full_name} : null,
           },
           room.id,
-          room.is_closed,
+          Boolean(roomRow?.is_closed ?? room.is_closed),
           user.id,
         );
-        onInsert(mapped);
+        onMessageInsert(mapped);
+      },
+    )
+    .on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'consultation_rooms',
+        filter: `id=eq.${room.id}`,
+      },
+      payload => {
+        if (!onRoomUpdate) return;
+        const next = payload.new;
+        if (next && typeof next.is_closed === 'boolean') {
+          onRoomUpdate({is_closed: next.is_closed});
+        }
       },
     )
     .subscribe();
@@ -272,4 +318,9 @@ export async function subscribeToRoomMessages(appointmentId, onInsert) {
   return () => {
     supabase.removeChannel(channel);
   };
+}
+
+/** @deprecated Use subscribeToConsultationRoom */
+export async function subscribeToRoomMessages(appointmentId, onInsert) {
+  return subscribeToConsultationRoom(appointmentId, {onMessageInsert: onInsert});
 }

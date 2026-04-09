@@ -1,4 +1,5 @@
-import React, {useCallback, useEffect, useState} from 'react';
+import React, {useCallback, useState} from 'react';
+import {useFocusEffect} from '@react-navigation/native';
 import {
   ActivityIndicator,
   Alert,
@@ -79,9 +80,11 @@ export default function MyAppointments({navigation}) {
     }
   }, []);
 
-  useEffect(() => {
-    loadAppointments();
-  }, [loadAppointments]);
+  useFocusEffect(
+    useCallback(() => {
+      loadAppointments();
+    }, [loadAppointments]),
+  );
 
   const handleBack = () => {
     if (navigation.canGoBack()) {

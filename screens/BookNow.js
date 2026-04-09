@@ -13,7 +13,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { getAvailability } from '../services/appointmentService';
+import {
+  formatLocalDateString,
+  getAvailability,
+  isConsultationSlotInTheFuture,
+} from '../services/appointmentService';
 
 export default function BookNow({navigation, route}) {
   const [selectedTime, setSelectedTime] = useState(null);
@@ -27,7 +31,7 @@ export default function BookNow({navigation, route}) {
   const [reason, setReason] = useState('');
   const attorney = route?.params?.attorney || { name: 'Dr. Sarah Johnson', specialty: 'Corporate Law', price: '₱2,500.00' };
 
-  const localDateStr = new Date(selectedDate.getTime() - selectedDate.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+  const localDateStr = formatLocalDateString(selectedDate);
 
   const fetchAvailableSlots = useCallback(async () => {
     if (!attorney?.id) return;
@@ -42,23 +46,11 @@ export default function BookNow({navigation, route}) {
 
       const now = new Date();
 
-      const availableTimeStrings = slots.map(s => s.time).filter(timeStr => {
-        const [time, modifier] = String(timeStr).split(' ');
-        const [rawHour, rawMinute] = time.split(':');
-        let hour = Number(rawHour);
-        if (modifier === 'PM' && hour < 12) hour += 12;
-        if (modifier === 'AM' && hour === 12) hour = 0;
-
-        const slotDate = new Date(
-          selectedDate.getFullYear(),
-          selectedDate.getMonth(),
-          selectedDate.getDate(),
-          hour,
-          Number(rawMinute),
-          0,
+      const availableTimeStrings = slots
+        .map(s => s.time)
+        .filter(timeStr =>
+          isConsultationSlotInTheFuture(selectedDate, timeStr, now),
         );
-        return slotDate > now;
-      });
 
       setAvailableSlots(availableTimeStrings);
     } catch (error) {
@@ -84,6 +76,14 @@ export default function BookNow({navigation, route}) {
 
     if (!selectedTime) {
       Alert.alert('Error', 'Please select a time slot.');
+      return;
+    }
+
+    if (!isConsultationSlotInTheFuture(selectedDate, selectedTime)) {
+      Alert.alert(
+        'Time no longer available',
+        'That time has already passed today. Please pick a later slot.',
+      );
       return;
     }
 

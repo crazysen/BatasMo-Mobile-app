@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   getAppointmentMessages,
   sendAppointmentMessage,
-  subscribeToRoomMessages,
+  subscribeToConsultationRoom,
   uploadAndSendChatAttachment,
 } from './messageService';
 
@@ -91,12 +91,12 @@ function mergeById(existing, incoming) {
 
 export async function getThreadMessages(threadId) {
   try {
-    const rows = await getAppointmentMessages(threadId);
-    if (Array.isArray(rows)) {
-      const messages = rows.map(mapApiMessage);
+    const result = await getAppointmentMessages(threadId);
+    if (result && Array.isArray(result.rows)) {
+      const messages = result.rows.map(mapApiMessage);
       return {
         messages,
-        isClosed: messages.length > 0 ? messages[0].is_closed : false,
+        isClosed: Boolean(result.isClosed),
       };
     }
     return {messages: [], isClosed: false};
@@ -135,13 +135,27 @@ export async function appendThreadAttachment(threadId, asset) {
 }
 
 /**
- * Live updates: call onMessages with full merged list when a new row arrives.
+ * Live updates: merge new messages; when the room is closed/updated, refresh isClosed and message flags.
+ * @param {string} threadId
+ * @param {React.Dispatch<React.SetStateAction<any[]>>} setMessages
+ * @param {React.Dispatch<React.SetStateAction<boolean>>} [setIsClosed]
  * @returns {Promise<() => void>}
  */
-export async function attachThreadRealtime(threadId, setMessages) {
-  const unsub = await subscribeToRoomMessages(threadId, mapped => {
-    const ui = mapApiMessage(mapped);
-    setMessages(prev => mergeById(prev, ui));
+export async function attachThreadRealtime(threadId, setMessages, setIsClosed) {
+  const unsub = await subscribeToConsultationRoom(threadId, {
+    onMessageInsert: mapped => {
+      const ui = mapApiMessage(mapped);
+      setMessages(prev => mergeById(prev, ui));
+    },
+    onRoomUpdate: ({is_closed}) => {
+      const closed = Boolean(is_closed);
+      if (setIsClosed) {
+        setIsClosed(closed);
+      }
+      setMessages(prev =>
+        prev.map(m => ({...m, is_closed: closed})),
+      );
+    },
   });
   return unsub;
 }

@@ -7,12 +7,13 @@ import {
   TouchableOpacity,
   FlatList,
   ScrollView,
-  KeyboardAvoidingView,
   Platform,
   Alert,
   ActivityIndicator,
   Keyboard,
+  Modal,
 } from 'react-native';
+import {useFocusEffect} from '@react-navigation/native';
 import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -23,6 +24,10 @@ import {
   attachThreadRealtime,
   getThreadMessages,
 } from '../services/chatService';
+import {
+  hasFeedbackForAppointment,
+  submitConsultationFeedback,
+} from '../services/consultationFeedbackService';
 
 const ConsultationChat = ({navigation, route}) => {
   const insets = useSafeAreaInsets();
@@ -30,6 +35,11 @@ const ConsultationChat = ({navigation, route}) => {
   const [messages, setMessages] = useState([]);
   const [isClosed, setIsClosed] = useState(false);
   const [sending, setSending] = useState(false);
+  const [feedbackModalVisible, setFeedbackModalVisible] = useState(false);
+  const [feedbackRating, setFeedbackRating] = useState(0);
+  const [feedbackComment, setFeedbackComment] = useState('');
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
+  const [keyboardInset, setKeyboardInset] = useState(0);
   const listRef = useRef(null);
 
   const chatName = route?.params?.chatName || 'Attorney';
@@ -59,7 +69,7 @@ const ConsultationChat = ({navigation, route}) => {
     let cancelled = false;
     (async () => {
       try {
-        const unsub = await attachThreadRealtime(threadId, setMessages);
+        const unsub = await attachThreadRealtime(threadId, setMessages, setIsClosed);
         if (!cancelled) {
           unsubscribe = unsub;
         }
@@ -73,18 +83,49 @@ const ConsultationChat = ({navigation, route}) => {
     };
   }, [threadId]);
 
+  useFocusEffect(
+    useCallback(() => {
+      if (!isClosed || !threadId) {
+        return;
+      }
+      let cancelled = false;
+      (async () => {
+        try {
+          const has = await hasFeedbackForAppointment(threadId);
+          if (!cancelled && !has) {
+            setFeedbackModalVisible(true);
+          }
+        } catch {
+          // ignore
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [isClosed, threadId]),
+  );
+
   useEffect(() => {
     listRef.current?.scrollToEnd({animated: true});
   }, [messages.length]);
 
   useEffect(() => {
-    const showSub = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-      () => {
-        listRef.current?.scrollToEnd({animated: true});
-      },
-    );
-    return () => showSub.remove();
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const onShow = e => {
+      const h = e?.endCoordinates?.height ?? 0;
+      setKeyboardInset(h);
+      requestAnimationFrame(() => listRef.current?.scrollToEnd({animated: true}));
+    };
+    const onHide = () => setKeyboardInset(0);
+
+    const subShow = Keyboard.addListener(showEvt, onShow);
+    const subHide = Keyboard.addListener(hideEvt, onHide);
+    return () => {
+      subShow.remove();
+      subHide.remove();
+    };
   }, []);
 
   const handleSendMessage = async () => {
@@ -186,6 +227,31 @@ const ConsultationChat = ({navigation, route}) => {
     }
   };
 
+  const handleFeedbackSubmit = async () => {
+    if (feedbackRating < 1 || feedbackRating > 5) {
+      Alert.alert('Rating', 'Please select a star rating from 1 to 5.');
+      return;
+    }
+    try {
+      setFeedbackSubmitting(true);
+      await submitConsultationFeedback(threadId, {
+        rating: feedbackRating,
+        comment: feedbackComment,
+      });
+      setFeedbackModalVisible(false);
+      setFeedbackComment('');
+      setFeedbackRating(0);
+    } catch (e) {
+      Alert.alert('Error', e?.message ?? 'Could not save feedback.');
+    } finally {
+      setFeedbackSubmitting(false);
+    }
+  };
+
+  const handleFeedbackSkip = () => {
+    setFeedbackModalVisible(false);
+  };
+
   const ActionButton = ({icon, label, onPress}) => (
     <TouchableOpacity style={styles.actionChip} onPress={onPress} activeOpacity={0.7}>
       <Text style={styles.actionIcon}>{icon}</Text>
@@ -208,10 +274,6 @@ const ConsultationChat = ({navigation, route}) => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <KeyboardAvoidingView
-        style={styles.keyboardAvoid}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => (navigation.canGoBack() ? navigation.goBack() : null)}>
             <Text style={styles.backArrow}>‹</Text>
@@ -225,62 +287,128 @@ const ConsultationChat = ({navigation, route}) => {
           </View>
         </View>
 
-        <FlatList
-          ref={listRef}
-          style={styles.messagesList}
-          data={messages}
-          keyExtractor={item => item.id}
-          renderItem={renderItem}
-          contentContainerStyle={styles.chatList}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-          onContentSizeChange={() => listRef.current?.scrollToEnd({animated: true})}
-          ListHeaderComponent={
-            <>
-              <View style={styles.encryptionBadge}>
-                <Text style={styles.encryptionText}>
-                  🔒 This session is end-to-end encrypted for your privacy.
-                </Text>
-              </View>
-              {isClosed && (
-                <View style={styles.closedBadge}>
-                  <Text style={styles.closedText}>
-                    ⚠️ This consultation has ended. You can no longer send messages.
+        <View style={styles.keyboardAvoid}>
+          <FlatList
+            ref={listRef}
+            style={styles.messagesList}
+            data={messages}
+            keyExtractor={item => item.id}
+            renderItem={renderItem}
+            contentContainerStyle={styles.chatList}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+            onContentSizeChange={() => listRef.current?.scrollToEnd({animated: true})}
+            ListHeaderComponent={
+              <>
+                <View style={styles.encryptionBadge}>
+                  <Text style={styles.encryptionText}>
+                    🔒 This session is end-to-end encrypted for your privacy.
                   </Text>
                 </View>
-              )}
-            </>
-          }
-        />
+                {isClosed && (
+                  <View style={styles.closedBadge}>
+                    <Text style={styles.closedText}>
+                      Consultation Ended — you can review messages below; sending is disabled.
+                    </Text>
+                  </View>
+                )}
+              </>
+            }
+          />
 
-        <View style={[styles.footer, {paddingBottom: Math.max(insets.bottom, 16)}]}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.actionsRow}>
-            <ActionButton icon="🖼" label="Photo" onPress={handlePickImage} />
-            <ActionButton icon="📄" label="File" onPress={handlePickFile} />
-          </ScrollView>
-          <View style={styles.inputRow}>
-            <TextInput
-              style={[styles.input, isClosed && styles.inputDisabled]}
-              placeholder={isClosed ? 'Consultation closed' : `Message ${chatName}...`}
-              value={messageText}
-              onChangeText={setMessageText}
-              placeholderTextColor="#94A3B8"
-              editable={!isClosed}
-            />
-            {sending ? (
-              <ActivityIndicator style={{marginLeft: 12}} />
-            ) : (
-              <TouchableOpacity
-                style={[styles.sendButton, (isClosed || !messageText.trim()) && styles.sendButtonDisabled]}
-                onPress={handleSendMessage}
-                activeOpacity={0.8}
-                disabled={isClosed || !messageText.trim()}>
-                <Text style={styles.sendIcon}>➤</Text>
-              </TouchableOpacity>
+          <View
+            style={[
+              styles.footer,
+              {
+                paddingBottom:
+                  keyboardInset > 0
+                    ? keyboardInset + 8
+                    : Math.max(insets.bottom, 16),
+              },
+            ]}>
+            {!isClosed && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.actionsRow}>
+                <ActionButton icon="🖼" label="Photo" onPress={handlePickImage} />
+                <ActionButton icon="📄" label="File" onPress={handlePickFile} />
+              </ScrollView>
             )}
+            <View style={styles.inputRow}>
+              <TextInput
+                style={[styles.input, isClosed && styles.inputDisabled]}
+                placeholder={isClosed ? 'Consultation closed' : `Message ${chatName}...`}
+                value={messageText}
+                onChangeText={setMessageText}
+                placeholderTextColor="#94A3B8"
+                editable={!isClosed}
+              />
+              {sending ? (
+                <ActivityIndicator style={{marginLeft: 12}} />
+              ) : (
+                <TouchableOpacity
+                  style={[styles.sendButton, (isClosed || !messageText.trim()) && styles.sendButtonDisabled]}
+                  onPress={handleSendMessage}
+                  activeOpacity={0.8}
+                  disabled={isClosed || !messageText.trim()}>
+                  <Text style={styles.sendIcon}>➤</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
         </View>
-      </KeyboardAvoidingView>
+
+      <Modal
+        visible={feedbackModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={handleFeedbackSkip}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>How was your consultation?</Text>
+            <Text style={styles.modalSubtitle}>Rate your attorney (optional comment below)</Text>
+            <View style={styles.starRow}>
+              {[1, 2, 3, 4, 5].map(n => (
+                <TouchableOpacity
+                  key={n}
+                  onPress={() => setFeedbackRating(n)}
+                  style={styles.starHit}
+                  hitSlop={{top: 8, bottom: 8, left: 4, right: 4}}>
+                  <Text style={[styles.starGlyph, n <= feedbackRating && styles.starGlyphActive]}>
+                    ★
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Feedback (optional)"
+              placeholderTextColor="#94A3B8"
+              value={feedbackComment}
+              onChangeText={setFeedbackComment}
+              multiline
+              maxLength={1000}
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.modalBtnSecondary} onPress={handleFeedbackSkip}>
+                <Text style={styles.modalBtnSecondaryText}>Skip</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modalBtnPrimary,
+                  styles.modalBtnPrimarySpaced,
+                  feedbackSubmitting && styles.modalBtnDisabled,
+                ]}
+                onPress={handleFeedbackSubmit}
+                disabled={feedbackSubmitting}>
+                {feedbackSubmitting ? (
+                  <ActivityIndicator color="#FFF" />
+                ) : (
+                  <Text style={styles.modalBtnPrimaryText}>Submit</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -329,6 +457,54 @@ const styles = StyleSheet.create({
   sendIcon: {color: 'white'},
   closedBadge: {backgroundColor: '#FFF7ED', padding: 12, borderRadius: 8, marginBottom: 20, borderWidth: 1, borderColor: '#FED7AA'},
   closedText: {color: '#C2410C', fontSize: 12, textAlign: 'center', fontWeight: 'bold'},
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  modalCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  modalTitle: {fontSize: 18, fontWeight: 'bold', color: '#0F172A', marginBottom: 6},
+  modalSubtitle: {fontSize: 13, color: '#64748B', marginBottom: 16},
+  starRow: {flexDirection: 'row', justifyContent: 'center', marginBottom: 16},
+  starHit: {paddingHorizontal: 4},
+  starGlyph: {fontSize: 36, color: '#E2E8F0'},
+  starGlyphActive: {color: '#D9B041'},
+  modalInput: {
+    minHeight: 80,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 14,
+    color: '#0F172A',
+    textAlignVertical: 'top',
+    marginBottom: 16,
+    backgroundColor: '#F8FAFC',
+  },
+  modalActions: {flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center'},
+  modalBtnSecondary: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  modalBtnSecondaryText: {color: '#64748B', fontSize: 15, fontWeight: '600'},
+  modalBtnPrimary: {
+    backgroundColor: '#0F172A',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 24,
+    minWidth: 100,
+    alignItems: 'center',
+  },
+  modalBtnPrimarySpaced: {marginLeft: 12},
+  modalBtnPrimaryText: {color: '#FFF', fontSize: 15, fontWeight: '600'},
+  modalBtnDisabled: {opacity: 0.6},
 });
 
 export default ConsultationChat;

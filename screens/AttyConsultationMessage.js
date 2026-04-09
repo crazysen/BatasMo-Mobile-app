@@ -6,7 +6,6 @@ import {
   TextInput,
   TouchableOpacity,
   FlatList,
-  KeyboardAvoidingView,
   Platform,
   Alert,
   ActivityIndicator,
@@ -23,6 +22,7 @@ import {
   attachThreadRealtime,
   getThreadMessages,
 } from '../services/chatService';
+import {closeConsultationRoom} from '../services/messageService';
 
 const ArrowLeft = props => <MaterialCommunityIcons name="arrow-left" {...props} />;
 const Paperclip = props => <MaterialCommunityIcons name="paperclip" {...props} />;
@@ -51,7 +51,9 @@ export default function ConsultationChat({navigation, route}) {
   const insets = useSafeAreaInsets();
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState([]);
+  const [isClosed, setIsClosed] = useState(false);
   const [sending, setSending] = useState(false);
+  const [keyboardInset, setKeyboardInset] = useState(0);
   const listRef = useRef(null);
   const clientName = route?.params?.clientName || 'Sarah Jenkins';
   const clientInitials = route?.params?.clientInitials || 'SJ';
@@ -62,10 +64,12 @@ export default function ConsultationChat({navigation, route}) {
 
   const loadThread = useCallback(async () => {
     try {
-      const {messages: rows} = await getThreadMessages(threadId);
+      const {messages: rows, isClosed: closed} = await getThreadMessages(threadId);
       setMessages(rows);
+      setIsClosed(closed);
     } catch {
       setMessages([]);
+      setIsClosed(false);
     }
   }, [threadId]);
 
@@ -78,7 +82,7 @@ export default function ConsultationChat({navigation, route}) {
     let cancelled = false;
     (async () => {
       try {
-        const unsub = await attachThreadRealtime(threadId, setMessages);
+        const unsub = await attachThreadRealtime(threadId, setMessages, setIsClosed);
         if (!cancelled) {
           unsubscribe = unsub;
         }
@@ -97,26 +101,61 @@ export default function ConsultationChat({navigation, route}) {
   }, [messages.length]);
 
   useEffect(() => {
-    const showSub = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-      () => {
-        listRef.current?.scrollToEnd({animated: true});
-      },
-    );
-    return () => showSub.remove();
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const onShow = e => {
+      const h = e?.endCoordinates?.height ?? 0;
+      setKeyboardInset(h);
+      requestAnimationFrame(() => listRef.current?.scrollToEnd({animated: true}));
+    };
+    const onHide = () => setKeyboardInset(0);
+
+    const subShow = Keyboard.addListener(showEvt, onShow);
+    const subHide = Keyboard.addListener(hideEvt, onHide);
+    return () => {
+      subShow.remove();
+      subHide.remove();
+    };
   }, []);
 
+  const handleEndConsultation = () => {
+    Alert.alert(
+      'End consultation',
+      'Clients will no longer be able to send messages. You can still read the thread.',
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {
+          text: 'End',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await closeConsultationRoom(threadId);
+              setIsClosed(true);
+              const next = await getThreadMessages(threadId);
+              setMessages(next.messages);
+              setIsClosed(next.isClosed);
+            } catch (e) {
+              Alert.alert('Error', e?.message ?? 'Could not end consultation.');
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const handleSend = async () => {
-    if (!message.trim() || sending) {
+    if (!message.trim() || sending || isClosed) {
       return;
     }
     try {
       setSending(true);
-      const {messages: next} = await appendThreadMessage(threadId, {
+      const {messages: next, isClosed: closed} = await appendThreadMessage(threadId, {
         text: message,
         sender: 'me',
       });
       setMessages(next);
+      setIsClosed(closed);
       setMessage('');
     } catch (e) {
       Alert.alert('Error', e?.message ?? 'Could not send.');
@@ -126,6 +165,9 @@ export default function ConsultationChat({navigation, route}) {
   };
 
   const handleAttachMenu = () => {
+    if (isClosed) {
+      return;
+    }
     Alert.alert('Attach', 'Choose a source', [
       {text: 'Photo library', onPress: () => pickImage()},
       {text: 'File', onPress: () => pickFile()},
@@ -134,6 +176,9 @@ export default function ConsultationChat({navigation, route}) {
   };
 
   const pickImage = async () => {
+    if (isClosed || sending) {
+      return;
+    }
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
       return;
@@ -148,7 +193,7 @@ export default function ConsultationChat({navigation, route}) {
     const asset = result.assets[0];
     try {
       setSending(true);
-      const {messages: next} = await appendThreadAttachment(threadId, {
+      const {messages: next, isClosed: closed} = await appendThreadAttachment(threadId, {
         uri: asset.uri,
         fileName: asset.fileName || 'photo.jpg',
         mime: asset.mimeType || 'image/jpeg',
@@ -156,6 +201,7 @@ export default function ConsultationChat({navigation, route}) {
         caption: message.trim() || undefined,
       });
       setMessages(next);
+      setIsClosed(closed);
       setMessage('');
     } catch (e) {
       Alert.alert('Error', e?.message ?? 'Upload failed.');
@@ -165,6 +211,9 @@ export default function ConsultationChat({navigation, route}) {
   };
 
   const pickFile = async () => {
+    if (isClosed || sending) {
+      return;
+    }
     const result = await DocumentPicker.getDocumentAsync({
       copyToCacheDirectory: true,
       type: '*/*',
@@ -187,7 +236,7 @@ export default function ConsultationChat({navigation, route}) {
     }
     try {
       setSending(true);
-      const {messages: next} = await appendThreadAttachment(threadId, {
+      const {messages: next, isClosed: closed} = await appendThreadAttachment(threadId, {
         uri: asset.uri,
         fileName: asset.name || 'file',
         mime: asset.mimeType || 'application/octet-stream',
@@ -195,6 +244,7 @@ export default function ConsultationChat({navigation, route}) {
         caption: message.trim() || undefined,
       });
       setMessages(next);
+      setIsClosed(closed);
       setMessage('');
     } catch (e) {
       Alert.alert('Error', e?.message ?? 'Upload failed.');
@@ -205,10 +255,6 @@ export default function ConsultationChat({navigation, route}) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <KeyboardAvoidingView
-        style={styles.keyboardAvoid}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}>
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
@@ -216,6 +262,13 @@ export default function ConsultationChat({navigation, route}) {
             <ArrowLeft size={24} color="#111827" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Consultation</Text>
+          {!isClosed ? (
+            <TouchableOpacity style={styles.endConsultationBtn} onPress={handleEndConsultation}>
+              <Text style={styles.endConsultationBtnText}>End Consultation</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.headerEndSpacer} />
+          )}
         </View>
 
         <View style={styles.clientBar}>
@@ -228,48 +281,73 @@ export default function ConsultationChat({navigation, route}) {
           <Text style={styles.clientName}>{clientName}</Text>
         </View>
 
-        <FlatList
-          ref={listRef}
-          style={styles.messagesList}
-          data={messages}
-          keyExtractor={item => item.id}
-          renderItem={({item}) => <MessageBubble item={item} />}
-          contentContainerStyle={styles.chatList}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-          onContentSizeChange={() => listRef.current?.scrollToEnd({animated: true})}
-          ListHeaderComponent={
-            <View style={styles.encryptedBadge}>
-              <ShieldCheck size={14} color="#F59E0B" />
-              <Text style={styles.encryptedText}>END-TO-END ENCRYPTED SECURE CHANNEL</Text>
-            </View>
-          }
-        />
+        <View style={styles.keyboardAvoid}>
+          <FlatList
+            ref={listRef}
+            style={styles.messagesList}
+            data={messages}
+            keyExtractor={item => item.id}
+            renderItem={({item}) => <MessageBubble item={item} />}
+            contentContainerStyle={styles.chatList}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+            onContentSizeChange={() => listRef.current?.scrollToEnd({animated: true})}
+            ListHeaderComponent={
+              <>
+                <View style={styles.encryptedBadge}>
+                  <ShieldCheck size={14} color="#F59E0B" />
+                  <Text style={styles.encryptedText}>END-TO-END ENCRYPTED SECURE CHANNEL</Text>
+                </View>
+                {isClosed && (
+                  <View style={styles.closedBanner}>
+                    <Text style={styles.closedBannerText}>
+                      Consultation Ended — messaging is disabled; you can read the thread below.
+                    </Text>
+                  </View>
+                )}
+              </>
+            }
+          />
 
-        <View style={[styles.inputWrapper, {paddingBottom: Math.max(insets.bottom, 16)}]}>
-          <View style={styles.inputContainer}>
-            <TouchableOpacity style={styles.attachmentBtn} onPress={handleAttachMenu}>
-              <Paperclip size={20} color="#9CA3AF" />
-            </TouchableOpacity>
-            <TextInput
-              style={styles.input}
-              value={message}
-              onChangeText={setMessage}
-              placeholder="Type your message..."
-              placeholderTextColor="#9CA3AF"
-              multiline
-              maxHeight={100}
-            />
-            {sending ? (
-              <ActivityIndicator style={{marginRight: 8}} />
-            ) : (
-              <TouchableOpacity style={styles.sendBtn} onPress={handleSend}>
-                <Send size={20} color="#FFF" />
-              </TouchableOpacity>
-            )}
+          <View
+            style={[
+              styles.inputWrapper,
+              {
+                paddingBottom:
+                  keyboardInset > 0
+                    ? keyboardInset + 8
+                    : Math.max(insets.bottom, 16),
+              },
+            ]}>
+            <View style={styles.inputContainer}>
+              {!isClosed && (
+                <TouchableOpacity style={styles.attachmentBtn} onPress={handleAttachMenu}>
+                  <Paperclip size={20} color="#9CA3AF" />
+                </TouchableOpacity>
+              )}
+              <TextInput
+                style={[styles.input, isClosed && styles.inputDisabled]}
+                value={message}
+                onChangeText={setMessage}
+                placeholder={isClosed ? 'Consultation ended' : 'Type your message...'}
+                placeholderTextColor="#9CA3AF"
+                multiline
+                maxHeight={100}
+                editable={!isClosed}
+              />
+              {sending ? (
+                <ActivityIndicator style={{marginRight: 8}} />
+              ) : (
+                <TouchableOpacity
+                  style={[styles.sendBtn, (isClosed || !message.trim()) && styles.sendBtnDisabled]}
+                  onPress={handleSend}
+                  disabled={isClosed || !message.trim()}>
+                  <Send size={20} color="#FFF" />
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
         </View>
-      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -286,13 +364,39 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF',
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
+    justifyContent: 'space-between',
   },
   headerTitle: {
+    flex: 1,
     fontSize: 22,
     fontWeight: 'bold',
     color: '#1E3A8A',
     fontFamily: Platform.OS === 'ios' ? 'Times New Roman' : 'serif',
     marginLeft: 15,
+  },
+  endConsultationBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  endConsultationBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#B45309',
+  },
+  headerEndSpacer: {width: 1},
+  closedBanner: {
+    backgroundColor: '#FFF7ED',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+  },
+  closedBannerText: {
+    color: '#C2410C',
+    fontSize: 12,
+    textAlign: 'center',
+    fontWeight: 'bold',
   },
   clientBar: {
     flexDirection: 'row',
@@ -396,6 +500,10 @@ const styles = StyleSheet.create({
     color: '#1E293B',
     maxHeight: 100,
   },
+  inputDisabled: {
+    color: '#94A3B8',
+    backgroundColor: 'transparent',
+  },
   attachmentBtn: {padding: 4},
   sendBtn: {
     width: 48,
@@ -404,6 +512,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#0F172A',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  sendBtnDisabled: {
+    backgroundColor: '#CBD5E1',
   },
   backButton: {padding: 4},
 });

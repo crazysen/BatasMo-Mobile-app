@@ -1,4 +1,5 @@
-import React, {useCallback, useEffect, useState} from 'react';
+import React, {useCallback, useState} from 'react';
+import {useFocusEffect} from '@react-navigation/native';
 import {
   ActivityIndicator,
   Alert,
@@ -81,9 +82,11 @@ export default function AttyMyAppointments({navigation}) {
     }
   }, []);
 
-  useEffect(() => {
-    loadAppointments();
-  }, [loadAppointments]);
+  useFocusEffect(
+    useCallback(() => {
+      loadAppointments();
+    }, [loadAppointments]),
+  );
 
   const handleStatusUpdate = async (appointmentId, status) => {
     try {

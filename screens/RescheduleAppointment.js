@@ -12,9 +12,12 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {rescheduleAppointment} from '../services/appointmentService';
-
-const TIME_SLOTS = ['9:00 AM', '10:00 AM', '11:00 AM', '1:00 PM', '2:00 PM'];
+import {
+  rescheduleAppointment,
+  HOURLY_CONSULTATION_SLOT_LABELS,
+  isConsultationSlotInTheFuture,
+  scheduledAtToLocalSlotDateTime,
+} from '../services/appointmentService';
 
 function parseSlotToParts(slotStr) {
   const [time, modifier] = slotStr.split(' ');
@@ -56,12 +59,19 @@ export default function RescheduleAppointment({navigation, route}) {
 
   const [scheduleAt, setScheduleAt] = useState(() => {
     const initial = parseInitialSchedule(appointment);
-    const match = findMatchingSlot(initial, TIME_SLOTS);
+    const allowed = HOURLY_CONSULTATION_SLOT_LABELS.filter(t =>
+      isConsultationSlotInTheFuture(initial, t),
+    );
+    const pool = allowed.length ? allowed : HOURLY_CONSULTATION_SLOT_LABELS;
+    const match = findMatchingSlot(initial, pool);
     if (match) {
-      return initial;
+      const {hour, minute} = parseSlotToParts(match);
+      const d = new Date(initial);
+      d.setHours(hour, minute, 0, 0);
+      return d;
     }
     const d = new Date(initial);
-    const {hour, minute} = parseSlotToParts(TIME_SLOTS[0]);
+    const {hour, minute} = parseSlotToParts(pool[0]);
     d.setHours(hour, minute, 0, 0);
     return d;
   });
@@ -70,9 +80,17 @@ export default function RescheduleAppointment({navigation, route}) {
   const [submitting, setSubmitting] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
-  const matchingSlot = useMemo(
-    () => findMatchingSlot(scheduleAt, TIME_SLOTS),
+  const selectableSlots = useMemo(
+    () =>
+      HOURLY_CONSULTATION_SLOT_LABELS.filter(t =>
+        isConsultationSlotInTheFuture(scheduleAt, t),
+      ),
     [scheduleAt],
+  );
+
+  const matchingSlot = useMemo(
+    () => findMatchingSlot(scheduleAt, selectableSlots),
+    [scheduleAt, selectableSlots],
   );
 
   const appointmentTitle = useMemo(
@@ -113,6 +131,20 @@ export default function RescheduleAppointment({navigation, route}) {
       setScheduleAt(prev => {
         const next = new Date(prev);
         next.setFullYear(date.getFullYear(), date.getMonth(), date.getDate());
+        const allowed = HOURLY_CONSULTATION_SLOT_LABELS.filter(t =>
+          isConsultationSlotInTheFuture(next, t),
+        );
+        if (allowed.length === 0) {
+          return next;
+        }
+        const stillOk = allowed.some(t => {
+          const {hour, minute} = parseSlotToParts(t);
+          return next.getHours() === hour && next.getMinutes() === minute;
+        });
+        if (!stillOk) {
+          const {hour, minute} = parseSlotToParts(allowed[0]);
+          next.setHours(hour, minute, 0, 0);
+        }
         return next;
       });
     }
@@ -124,9 +156,22 @@ export default function RescheduleAppointment({navigation, route}) {
       return;
     }
 
+    const scheduledAt = buildScheduleIsoUtc();
+    const {date: dStr, time: tStr} = scheduledAtToLocalSlotDateTime(scheduledAt);
+    if (dStr && tStr) {
+      const dp = dStr.split('-').map(Number);
+      const day = new Date(dp[0], dp[1] - 1, dp[2]);
+      if (!isConsultationSlotInTheFuture(day, tStr)) {
+        Alert.alert(
+          'Invalid time',
+          'That time has already passed. Please pick a later slot.',
+        );
+        return;
+      }
+    }
+
     try {
       setSubmitting(true);
-      const scheduledAt = buildScheduleIsoUtc();
       await rescheduleAppointment(appointment.id, scheduledAt, reason.trim());
       const whenLabel = `${scheduleAt.toLocaleDateString(undefined, {
         weekday: 'short',
@@ -203,27 +248,33 @@ export default function RescheduleAppointment({navigation, route}) {
           <Text style={styles.sectionLabel}>Select New Time Slot</Text>
           <Text style={styles.timeHint}>
             {scheduleAt.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
-            {!matchingSlot ? ' (custom from current appointment)' : ''}
+            {!matchingSlot ? ' (not on hourly grid — pick a slot below)' : ''}
           </Text>
-          <View style={styles.timeGrid}>
-            {TIME_SLOTS.map(time => (
-              <TouchableOpacity
-                key={time}
-                onPress={() => applyTimeSlot(time)}
-                style={[
-                  styles.timeChip,
-                  matchingSlot === time && styles.timeChipSelected,
-                ]}>
-                <Text
+          {selectableSlots.length === 0 ? (
+            <Text style={styles.noSlotsText}>
+              No times left on this date. Choose a later day.
+            </Text>
+          ) : (
+            <View style={styles.timeGrid}>
+              {selectableSlots.map(time => (
+                <TouchableOpacity
+                  key={time}
+                  onPress={() => applyTimeSlot(time)}
                   style={[
-                    styles.timeChipText,
-                    matchingSlot === time && styles.timeChipTextSelected,
+                    styles.timeChip,
+                    matchingSlot === time && styles.timeChipSelected,
                   ]}>
-                  {time}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+                  <Text
+                    style={[
+                      styles.timeChipText,
+                      matchingSlot === time && styles.timeChipTextSelected,
+                    ]}>
+                    {time}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
 
           <Text style={styles.sectionLabel}>Reason for Rescheduling (Optional)</Text>
           <TextInput
@@ -243,7 +294,10 @@ export default function RescheduleAppointment({navigation, route}) {
             </Text>
           </View>
 
-          <TouchableOpacity style={styles.confirmButton} onPress={handleConfirm} disabled={submitting}>
+          <TouchableOpacity
+            style={styles.confirmButton}
+            onPress={handleConfirm}
+            disabled={submitting || selectableSlots.length === 0}>
             {submitting ? (
               <ActivityIndicator color="#1E293B" />
             ) : (
@@ -306,6 +360,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#64748B',
     marginBottom: 10,
+  },
+  noSlotsText: {
+    fontSize: 14,
+    color: '#B45309',
+    fontWeight: '600',
+    marginBottom: 16,
   },
   datePicker: {
     flexDirection: 'row',

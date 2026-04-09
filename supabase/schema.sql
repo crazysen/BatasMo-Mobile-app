@@ -126,6 +126,10 @@ CREATE TABLE IF NOT EXISTS public.availability_slots (
 CREATE INDEX IF NOT EXISTS idx_availability_attorney_date
   ON public.availability_slots(attorney_id, date);
 
+-- One row per attorney/date/time (dedupe DB before applying on existing projects)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_availability_slots_attorney_date_time_unique
+  ON public.availability_slots (attorney_id, date, time);
+
 CREATE TRIGGER trg_availability_slots_updated_at
 BEFORE UPDATE ON public.availability_slots
 FOR EACH ROW
@@ -294,6 +298,27 @@ BEFORE UPDATE ON public.notifications
 FOR EACH ROW
 EXECUTE FUNCTION public.set_updated_at();
 
+-- Post-consultation feedback (one row per appointment; client submits after room is closed)
+CREATE TABLE IF NOT EXISTS public.consultation_feedback (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  appointment_id uuid NOT NULL REFERENCES public.appointments(id) ON DELETE CASCADE,
+  client_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  attorney_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  rating smallint NOT NULL CHECK (rating >= 1 AND rating <= 5),
+  comment text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT consultation_feedback_appointment_unique UNIQUE (appointment_id)
+);
+
+-- Denormalized for public profile cards (avoids joining profiles, which are RLS-restricted)
+ALTER TABLE public.consultation_feedback ADD COLUMN IF NOT EXISTS client_display_name text;
+
+CREATE INDEX IF NOT EXISTS idx_consultation_feedback_attorney
+  ON public.consultation_feedback(attorney_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_consultation_feedback_client
+  ON public.consultation_feedback(client_id, created_at DESC);
+
 -- Audit logs for failed login tracking (standalone, no FK needed)
 CREATE TABLE IF NOT EXISTS public.audit_logs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -317,6 +342,7 @@ ALTER TABLE public.notarial_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.payout_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.consultation_feedback ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 
 -- ============================================================
@@ -432,6 +458,40 @@ WITH CHECK (
   )
 );
 
+-- Consultation feedback policies
+DROP POLICY IF EXISTS "consultation_feedback_client_select" ON public.consultation_feedback;
+CREATE POLICY "consultation_feedback_client_select"
+ON public.consultation_feedback FOR SELECT
+USING (auth.uid() = client_id);
+
+DROP POLICY IF EXISTS "consultation_feedback_attorney_select" ON public.consultation_feedback;
+CREATE POLICY "consultation_feedback_attorney_select"
+ON public.consultation_feedback FOR SELECT
+USING (auth.uid() = attorney_id);
+
+DROP POLICY IF EXISTS "consultation_feedback_client_insert" ON public.consultation_feedback;
+CREATE POLICY "consultation_feedback_client_insert"
+ON public.consultation_feedback FOR INSERT
+WITH CHECK (
+  auth.uid() = client_id
+  AND EXISTS (
+    SELECT 1
+    FROM public.appointments a
+    JOIN public.consultation_rooms r ON r.appointment_id = a.id
+    WHERE a.id = consultation_feedback.appointment_id
+      AND a.client_id = auth.uid()
+      AND a.attorney_id = consultation_feedback.attorney_id
+      AND r.is_closed = true
+  )
+);
+
+-- Authenticated users can read feedback (attorney profile "Recent Client Feedback")
+DROP POLICY IF EXISTS "consultation_feedback_select_auth_directory" ON public.consultation_feedback;
+CREATE POLICY "consultation_feedback_select_auth_directory"
+ON public.consultation_feedback FOR SELECT
+TO authenticated
+USING (true);
+
 -- Notarial request policies
 DROP POLICY IF EXISTS "notarial_owner_select" ON public.notarial_requests;
 CREATE POLICY "notarial_owner_select"
@@ -519,6 +579,33 @@ BEGIN
 END;
 $$;
 
+-- Clear booking flag when consultation is done / cancelled (SECURITY DEFINER so clients can release via app)
+CREATE OR REPLACE FUNCTION public.release_slot_booked(p_attorney_id uuid, p_date date, p_time varchar)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  UPDATE public.availability_slots
+  SET is_booked = false, updated_at = now()
+  WHERE attorney_id = p_attorney_id AND date = p_date AND time = p_time;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.release_availability_slot_by_id(p_slot_id uuid)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  UPDATE public.availability_slots
+  SET is_booked = false, updated_at = now()
+  WHERE id = p_slot_id;
+END;
+$$;
+
 -- Expo push token for client devices (optional; used by send-reschedule-push Edge Function)
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS expo_push_token text;
 
@@ -551,12 +638,17 @@ CREATE OR REPLACE VIEW public.conversations AS
 SELECT id, appointment_id, is_closed, created_at, updated_at
 FROM public.consultation_rooms;
 
--- Realtime: add messages to supabase_realtime publication (no-op if already member)
+-- Realtime: add messages + consultation_rooms to supabase_realtime publication (no-op if already member)
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
     BEGIN
       ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;
+    EXCEPTION
+      WHEN duplicate_object THEN NULL;
+    END;
+    BEGIN
+      ALTER PUBLICATION supabase_realtime ADD TABLE public.consultation_rooms;
     EXCEPTION
       WHEN duplicate_object THEN NULL;
     END;
