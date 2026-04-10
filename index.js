@@ -42,12 +42,7 @@ import PaymentMethod from './screens/PaymentMethod.js';
 import UploadIDScreen from './screens/UploadIDScreen.js';
 import FaceRecognitionScreen from './screens/FaceRecognitionScreen.js';
 import {UserProfileProvider} from './context/UserProfileContext';
-import AttyConsultationRequest from './screens/AttyConsultationRequest';
 import AttyConsultationMessage from './screens/AttyConsultationMessage';
-import AttyNotarialServices from './screens/AttyNotarialServices';
-import AttyAcceptNotarialRequest from './screens/AttyAcceptNotarialRequest';
-import AttyNotarialRequestAccepted from './screens/AttyNotarialRequestAccepted';
-import AttyNotarialRequestRejected from './screens/AttyNotarialRequestRejected';
 import AttyMyEarnings from './screens/AttyMyEarnings';
 import AttyPayoutDetails from './screens/AttyPayoutDetails';
 import AttyConfirmPayout from './screens/AttyConfirmPayout';
@@ -126,12 +121,7 @@ function App() {
               <Stack.Screen name="UploadIDScreen" component={UploadIDScreen} />
               <Stack.Screen name="FaceRecognitionScreen" component={FaceRecognitionScreen} />
               <Stack.Screen name="AttyAvailabilityManager" component={AttyAvailabilityManager} />
-              <Stack.Screen name="AttyConsultationRequest" component={AttyConsultationRequest} />
               <Stack.Screen name="AttyConsultationMessage" component={AttyConsultationMessage} />
-              <Stack.Screen name="AttyNotarialServices" component={AttyNotarialServices} />
-              <Stack.Screen name="AttyAcceptNotarialRequest" component={AttyAcceptNotarialRequest} />
-              <Stack.Screen name="AttyNotarialRequestAccepted" component={AttyNotarialRequestAccepted} />
-              <Stack.Screen name="AttyNotarialRequestRejected" component={AttyNotarialRequestRejected} />
               <Stack.Screen name="AttyMyEarnings" component={AttyMyEarnings} />
               <Stack.Screen name="AttyPayoutDetails" component={AttyPayoutDetails} />
               <Stack.Screen name="AttyConfirmPayout" component={AttyConfirmPayout} />

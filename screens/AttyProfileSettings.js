@@ -10,11 +10,14 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
+import {ClientScreenShell} from '../components/ClientScreenShell';
 import {useUserProfile} from '../context/UserProfileContext';
 import {getMyProfile, updateMyProfile} from '../services/profileService';
+import {REFERENCE_THEME as T} from '../constants/referenceTheme';
+
+const accentGold = T.gold[1];
 
 export default function AttyProfileSettings({navigation}) {
   const {updateProfile} = useUserProfile();
@@ -167,7 +170,7 @@ export default function AttyProfileSettings({navigation}) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ClientScreenShell edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.canGoBack() ? navigation.goBack() : null}>
           <Text style={styles.backText}>← Back</Text>
@@ -178,7 +181,7 @@ export default function AttyProfileSettings({navigation}) {
       <ScrollView contentContainerStyle={styles.content}>
         {loading ? (
           <View style={styles.loadingCard}>
-            <ActivityIndicator color="#0F172A" />
+            <ActivityIndicator color={accentGold} />
             <Text style={styles.loadingText}>Loading profile...</Text>
           </View>
         ) : null}
@@ -297,107 +300,104 @@ export default function AttyProfileSettings({navigation}) {
           <Text style={styles.saveButtonText}>{saving ? 'Saving...' : 'Save Changes'}</Text>
         </TouchableOpacity>
       </ScrollView>
-    </SafeAreaView>
+    </ClientScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {flex: 1, backgroundColor: '#F8FAFC'},
   header: {
     paddingHorizontal: 20,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
+    borderBottomColor: 'rgba(244, 215, 139, 0.1)',
   },
-  backText: {color: '#EAB308', fontWeight: '700', fontSize: 16, marginBottom: 6},
-  title: {fontSize: 24, fontWeight: '800', color: '#0F172A'},
+  backText: {color: accentGold, fontWeight: '800', fontSize: 16, marginBottom: 6},
+  title: {fontSize: 24, fontWeight: '900', color: T.text},
   content: {padding: 20, paddingBottom: 32},
   loadingCard: {
-    backgroundColor: '#FFF',
+    backgroundColor: 'rgba(12, 19, 30, 0.85)',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(244, 215, 139, 0.12)',
     borderRadius: 12,
     padding: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
     marginBottom: 12,
   },
-  loadingText: {fontSize: 13, color: '#64748B'},
+  loadingText: {fontSize: 13, color: T.textMuted, marginLeft: 8},
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(12, 19, 30, 0.92)',
     borderRadius: 16,
     padding: 16,
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(244, 215, 139, 0.12)',
   },
-  sectionTitle: {fontSize: 18, fontWeight: '700', color: '#0F172A', marginBottom: 10},
-  label: {fontSize: 13, fontWeight: '600', color: '#475569', marginBottom: 6, marginTop: 10},
+  sectionTitle: {fontSize: 18, fontWeight: '800', color: T.text, marginBottom: 10},
+  label: {fontSize: 13, fontWeight: '600', color: T.textMuted, marginBottom: 6, marginTop: 10},
   input: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: 'rgba(4, 7, 11, 0.45)',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(244, 215, 139, 0.15)',
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    color: '#0F172A',
+    color: T.text,
   },
   disabledInput: {
-    backgroundColor: '#EEF2F7',
-    color: '#64748B',
+    backgroundColor: 'rgba(18, 26, 36, 0.6)',
+    color: T.textSoft,
   },
   multiline: {minHeight: 84, textAlignVertical: 'top'},
   uploadButton: {
     marginTop: 14,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: 'rgba(244, 215, 139, 0.25)',
     borderStyle: 'dashed',
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 10,
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: 'rgba(4, 7, 11, 0.35)',
   },
-  uploadButtonText: {fontWeight: '700', color: '#334155', fontSize: 13},
-  hintText: {fontSize: 12, color: '#64748B', marginTop: 8},
+  uploadButtonText: {fontWeight: '800', color: accentGold, fontSize: 13},
+  hintText: {fontSize: 12, color: T.textMuted, marginTop: 8},
   avatarPreviewBox: {
     marginTop: 12,
     alignItems: 'center',
     paddingVertical: 10,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    borderColor: 'rgba(244, 215, 139, 0.12)',
+    backgroundColor: 'rgba(4, 7, 11, 0.35)',
   },
   avatarPreview: {
     width: 92,
     height: 92,
     borderRadius: 46,
     borderWidth: 2,
-    borderColor: '#CBD5E1',
+    borderColor: 'rgba(244, 215, 139, 0.3)',
   },
   avatarPlaceholder: {
     width: 92,
     height: 92,
     borderRadius: 46,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: 'rgba(18, 26, 36, 0.8)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarPlaceholderText: {
-    color: '#64748B',
+    color: T.textSoft,
     fontSize: 11,
     fontWeight: '600',
   },
   saveButton: {
     height: 48,
     borderRadius: 12,
-    backgroundColor: '#0F172A',
+    backgroundColor: accentGold,
     justifyContent: 'center',
     alignItems: 'center',
   },
   disabledButton: {opacity: 0.7},
-  saveButtonText: {color: '#FFFFFF', fontWeight: '700', fontSize: 16},
+  saveButtonText: {color: '#101B2C', fontWeight: '800', fontSize: 16},
 });

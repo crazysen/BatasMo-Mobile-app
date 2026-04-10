@@ -4,145 +4,66 @@ import {
   Text,
   View,
   TouchableOpacity,
-  Modal,
   } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { REFERENCE_THEME as T } from '../constants/referenceTheme';
+
+const accentGold = T.gold[1];
 
 const ShieldCheck = (props) => <MaterialCommunityIcons name="shield-check" {...props} />;
 const Wallet = (props) => <MaterialCommunityIcons name="wallet" {...props} />;
 const CheckCircle2 = (props) => <MaterialCommunityIcons name="check-circle" {...props} />;
 const Info = (props) => <MaterialCommunityIcons name="information" {...props} />;
 
-const ConfirmPayoutModal = ({ visible, onClose, navigation }) => {
-  const handleConfirmWithdraw = () => {
-    onClose();
-    setTimeout(() => {
-      navigation?.navigate('AttySuccessWithdrawal');
-    }, 300);
-  };
-
-  return (
-    <Modal
-      animationType="slide"
-      transparent={true}
-      visible={visible}
-      onRequestClose={onClose}
-    >
-      <View style={styles.overlay}>
-        <View style={styles.modalContainer}>
-          {/* Handle bar at the top */}
-          <View style={styles.handle} />
-
-          {/* Security Icon */}
-          <View style={styles.shieldIconContainer}>
-            <ShieldCheck size={32} color="#1E293B" />
-          </View>
-
-          <Text style={styles.modalTitle}>Confirm Payout Request</Text>
-          <Text style={styles.modalSubtitle}>Review your withdrawal details below</Text>
-
-          {/* Summary Card */}
-          <View style={styles.summaryCard}>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Amount to Withdraw</Text>
-              <Text style={styles.summaryValue}>₱184,200.00</Text>
-            </View>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Transfer Fee</Text>
-              <Text style={[styles.summaryValue, { color: '#10B981' }]}>₱0.00</Text>
-            </View>
-            
-            <View style={styles.divider} />
-            
-            <View style={styles.summaryRow}>
-              <Text style={styles.totalLabel}>Total to be Received</Text>
-              <Text style={styles.totalValue}>₱184,200.00</Text>
-            </View>
-          </View>
-
-          {/* Destination Account Card */}
-          <View style={styles.accountCard}>
-            <View style={styles.walletIconBg}>
-              <Wallet size={20} color="#1E293B" />
-            </View>
-            <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={styles.accountName}>GCash: 0917****123</Text>
-              <Text style={styles.accountSub}>DESTINATION ACCOUNT</Text>
-            </View>
-            <CheckCircle2 size={22} color="#1E293B" />
-          </View>
-
-          {/* Info Box */}
-          <View style={styles.infoBox}>
-            <Info size={18} color="#64748B" />
-            <Text style={styles.infoText}>
-              Funds will be transferred to your account within <Text style={{fontWeight: 'bold'}}>1-3 business days.</Text>
-            </Text>
-          </View>
-
-          {/* Action Buttons */}
-          <TouchableOpacity style={styles.confirmBtn} onPress={handleConfirmWithdraw}>
-            <Text style={styles.confirmBtnText}>Confirm & Withdraw</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity onPress={onClose} style={styles.cancelBtn}>
-            <Text style={styles.cancelBtnText}>Cancel Request</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
-  );
-};
-
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.6)', // Dark semi-transparent background
-    justifyContent: 'flex-end',
-  },
   modalContainer: {
-    backgroundColor: '#FFF',
+    backgroundColor: 'rgba(12, 19, 30, 0.98)',
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
     paddingHorizontal: 24,
     paddingBottom: 40,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(244, 215, 139, 0.15)',
+    borderBottomWidth: 0,
   },
   handle: {
     width: 40,
     height: 5,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: 'rgba(244, 215, 139, 0.25)',
     borderRadius: 10,
     marginVertical: 15,
   },
   shieldIconContainer: {
     width: 60,
     height: 60,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: 'rgba(215, 177, 74, 0.12)',
     borderRadius: 30,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(244, 215, 139, 0.2)',
   },
   modalTitle: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#0F172A',
+    fontWeight: '900',
+    color: T.text,
     marginTop: 20,
   },
   modalSubtitle: {
     fontSize: 14,
-    color: '#94A3B8',
+    color: T.textMuted,
     marginTop: 8,
     marginBottom: 25,
   },
   summaryCard: {
     width: '100%',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: 'rgba(4, 7, 11, 0.5)',
     borderRadius: 20,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#F1F5F9',
+    borderColor: 'rgba(244, 215, 139, 0.12)',
   },
   summaryRow: {
     flexDirection: 'row',
@@ -150,15 +71,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginVertical: 6,
   },
-  summaryLabel: { fontSize: 14, color: '#94A3B8' },
-  summaryValue: { fontSize: 15, fontWeight: 'bold', color: '#1E293B' },
+  summaryLabel: { fontSize: 14, color: T.textMuted },
+  summaryValue: { fontSize: 15, fontWeight: 'bold', color: T.text },
   divider: {
     height: 1,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: 'rgba(244, 215, 139, 0.12)',
     marginVertical: 15,
   },
-  totalLabel: { fontSize: 18, fontWeight: 'bold', color: '#0F172A' },
-  totalValue: { fontSize: 20, fontWeight: 'bold', color: '#0F172A' },
+  totalLabel: { fontSize: 18, fontWeight: 'bold', color: T.text },
+  totalValue: { fontSize: 20, fontWeight: 'bold', color: accentGold },
   
   accountCard: {
     width: '100%',
@@ -166,48 +87,46 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
     borderWidth: 1,
-    borderColor: '#F1F5F9',
+    borderColor: 'rgba(244, 215, 139, 0.12)',
     borderRadius: 16,
     marginTop: 20,
+    backgroundColor: 'rgba(4, 7, 11, 0.35)',
   },
   walletIconBg: {
     width: 44,
     height: 44,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: 'rgba(215, 177, 74, 0.12)',
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  accountName: { fontSize: 16, fontWeight: 'bold', color: '#1E293B' },
-  accountSub: { fontSize: 10, color: '#94A3B8', fontWeight: 'bold', marginTop: 4 },
+  accountName: { fontSize: 16, fontWeight: 'bold', color: T.text },
+  accountSub: { fontSize: 10, color: T.textSoft, fontWeight: 'bold', marginTop: 4 },
   
   infoBox: {
     flexDirection: 'row',
-    backgroundColor: '#F0F9FF',
+    backgroundColor: 'rgba(56, 189, 248, 0.08)',
     padding: 16,
     borderRadius: 12,
     marginTop: 20,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.2)',
   },
-  infoText: { flex: 1, marginLeft: 12, fontSize: 13, color: '#64748B', lineHeight: 18 },
+  infoText: { flex: 1, marginLeft: 12, fontSize: 13, color: T.textMuted, lineHeight: 18 },
   
   confirmBtn: {
     width: '100%',
-    backgroundColor: '#0F172A',
+    backgroundColor: accentGold,
     paddingVertical: 18,
     borderRadius: 12,
     alignItems: 'center',
     marginTop: 30,
-    // Shadow for the button
-    shadowColor: '#1E293B',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
     elevation: 5,
   },
-  confirmBtnText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
+  confirmBtnText: { color: '#101B2C', fontSize: 16, fontWeight: '800' },
   cancelBtn: { marginTop: 20, padding: 10 },
-  cancelBtnText: { color: '#94A3B8', fontWeight: 'bold' },
+  cancelBtnText: { color: T.textMuted, fontWeight: '700' },
 });
 
 export default function ConfirmPayoutScreen({ navigation }) {
@@ -218,14 +137,14 @@ export default function ConfirmPayoutScreen({ navigation }) {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.6)', justifyContent: 'flex-end' }}>
+    <View style={{ flex: 1, backgroundColor: 'rgba(4, 7, 11, 0.92)', justifyContent: 'flex-end' }}>
       <View style={styles.modalContainer}>
         {/* Handle bar at the top */}
         <View style={styles.handle} />
 
         {/* Security Icon */}
         <View style={styles.shieldIconContainer}>
-          <ShieldCheck size={32} color="#1E293B" />
+          <ShieldCheck size={32} color={accentGold} />
         </View>
 
         <Text style={styles.modalTitle}>Confirm Payout Request</Text>
@@ -253,18 +172,18 @@ export default function ConfirmPayoutScreen({ navigation }) {
         {/* Destination Account Card */}
         <View style={styles.accountCard}>
           <View style={styles.walletIconBg}>
-            <Wallet size={20} color="#1E293B" />
+            <Wallet size={20} color={accentGold} />
           </View>
           <View style={{ flex: 1, marginLeft: 12 }}>
             <Text style={styles.accountName}>GCash: 0917****123</Text>
             <Text style={styles.accountSub}>DESTINATION ACCOUNT</Text>
           </View>
-          <CheckCircle2 size={22} color="#1E293B" />
+          <CheckCircle2 size={22} color={accentGold} />
         </View>
 
         {/* Info Box */}
         <View style={styles.infoBox}>
-          <Info size={18} color="#64748B" />
+          <Info size={18} color={T.textMuted} />
           <Text style={styles.infoText}>
             Funds will be transferred to your account within <Text style={{fontWeight: 'bold'}}>1-3 business days.</Text>
           </Text>

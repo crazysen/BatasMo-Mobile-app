@@ -1,7 +1,9 @@
-import React, {useCallback, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
+  Pressable,
   StyleSheet,
   View,
   Text,
@@ -10,11 +12,15 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import {useFocusEffect} from '@react-navigation/native';
-import {SafeAreaView} from 'react-native-safe-area-context';
+import {LinearGradient} from 'expo-linear-gradient';
+import {MaterialCommunityIcons} from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import {useUserProfile} from '../context/UserProfileContext';
-import {getMyAppointments} from '../services/appointmentService';
+import {formatScheduledAtDisplay, getMyAppointments} from '../services/appointmentService';
 import {getMyProfile} from '../services/profileService';
 import {getGreetingName} from '../utils/userDisplayName';
+import {ClientScreenShell} from '../components/ClientScreenShell';
+import {REFERENCE_THEME as T} from '../constants/referenceTheme';
 
 function resolveScheduleValue(item) {
   return (
@@ -25,6 +31,9 @@ function resolveScheduleValue(item) {
   );
 }
 
+const glassBorder = 'rgba(244, 215, 139, 0.2)';
+const accentGold = T.gold[1];
+
 const AttorneyDashboard = ({navigation}) => {
   const {width} = useWindowDimensions();
   const isSmallScreen = width < 380;
@@ -32,6 +41,52 @@ const AttorneyDashboard = ({navigation}) => {
 
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const upcomingPulseAnim = useRef(new Animated.Value(1)).current;
+  const upcomingPressScale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.delay(350),
+        Animated.timing(upcomingPulseAnim, {
+          toValue: 1.06,
+          duration: 1300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(upcomingPulseAnim, {
+          toValue: 1,
+          duration: 1300,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [upcomingPulseAnim]);
+
+  const handleUpcomingPressIn = () => {
+    Animated.spring(upcomingPressScale, {
+      toValue: 0.96,
+      speed: 35,
+      bounciness: 6,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handleUpcomingPressOut = () => {
+    Animated.spring(upcomingPressScale, {
+      toValue: 1,
+      speed: 25,
+      bounciness: 8,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const upcomingCombinedScale = Animated.multiply(
+    upcomingPulseAnim,
+    upcomingPressScale,
+  );
 
   const loadDashboard = useCallback(async () => {
     try {
@@ -82,152 +137,144 @@ const AttorneyDashboard = ({navigation}) => {
     }, [updateProfile]),
   );
 
-  const pendingCount = appointments.filter(
-    item => (item.status ?? '').toLowerCase() === 'pending',
-  ).length;
-  const upcomingCount = appointments.filter(item => {
-    const status = (item.status ?? '').toLowerCase();
-    return status === 'confirmed' || status === 'rescheduled';
-  }).length;
-
-  const recentConsultations = appointments.slice(0, 3).map(item => {
-    const scheduleValue = resolveScheduleValue(item);
-    let dateValue = null;
-    if (scheduleValue) {
-      const raw = String(scheduleValue).trim();
-      const hasTimezoneInfo = /([zZ]|[+-]\d{2}:?\d{2})$/.test(raw);
-
-      if (hasTimezoneInfo) {
-        const normalized = raw.replace(' ', 'T').replace(/\+00$/, 'Z');
-        dateValue = new Date(normalized);
-      } else {
-        const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
-        if (match) {
-          dateValue = new Date(
-            Number(match[1]),
-            Number(match[2]) - 1,
-            Number(match[3]),
-            Number(match[4]),
-            Number(match[5]),
-          );
-        } else {
-          dateValue = new Date(raw.replace(' ', 'T'));
-        }
+  const {upcomingCount, recentConsultations} = useMemo(() => {
+    const nonPending = [];
+    let upcoming = 0;
+    for (let i = 0; i < appointments.length; i += 1) {
+      const item = appointments[i];
+      const s = (item.status ?? '').toLowerCase();
+      const paidPending = s === 'pending' && item.payment_is_paid;
+      if (paidPending || s !== 'pending') {
+        nonPending.push(item);
+      }
+      if (paidPending || s === 'confirmed' || s === 'rescheduled') {
+        upcoming += 1;
       }
     }
-    return {
-      id: item.id,
-      name: item.client_name || 'Client',
-      type: item.title || 'Consultation',
-      time: dateValue && !Number.isNaN(dateValue.getTime())
-        ? dateValue.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})
-        : '--:--',
-      date: dateValue && !Number.isNaN(dateValue.getTime())
-        ? dateValue.toLocaleDateString()
-        : 'No schedule',
-      status: (item.status || 'pending').toUpperCase(),
-      initial: (item.client_name || 'C').trim()[0]?.toUpperCase() || 'C',
-    };
-  });
+    const recent = nonPending.slice(0, 3).map(item => {
+      const {date, time} = formatScheduledAtDisplay(resolveScheduleValue(item));
+      const s = (item.status || 'pending').toLowerCase();
+      return {
+        id: item.id,
+        name: item.client_name || 'Client',
+        type: item.title || 'Consultation',
+        time: time === '—' ? '--:--' : time,
+        date: date === '—' ? 'No schedule' : date,
+        status:
+          s === 'pending' && item.payment_is_paid
+            ? 'CONFIRMED'
+            : (item.status || 'pending').toUpperCase(),
+        initial: (item.client_name || 'C').trim()[0]?.toUpperCase() || 'C',
+      };
+    });
+    return {upcomingCount: upcoming, recentConsultations: recent};
+  }, [appointments]);
 
   const greetingName = getGreetingName(profile);
 
-  const MetricBar = ({label, percentage, color, value}) => (
-    <View style={styles.metricContainer}>
-      <View style={styles.metricHeader}>
-        <Text style={styles.metricLabel}>{label}</Text>
-        <Text style={styles.metricValue}>{value}%</Text>
-      </View>
-      <View style={styles.progressBarBg}>
-        <View style={[styles.progressBarFill, {width: `${percentage}%`, backgroundColor: color}]} />
-      </View>
-    </View>
-  );
+  const onMenu = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    navigation.navigate('AttyMenu');
+  };
+
+  const onProfile = () => {
+    Haptics.selectionAsync();
+    navigation.navigate('AttyProfileSettings');
+  };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.navbar}>
-        <TouchableOpacity style={styles.navButton} onPress={() => navigation.navigate('AttyMenu')}>
-          <Text style={styles.menuIcon}>☰</Text>
+    <ClientScreenShell edges={['top']}>
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.iconCircle} onPress={onMenu} accessibilityLabel="Open menu">
+          <MaterialCommunityIcons name="menu" size={22} color={T.text} />
         </TouchableOpacity>
-        <View style={styles.navTitleWrap}>
-          <Text
-            style={[styles.navTitle, isSmallScreen && styles.navTitleSmall]}
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            minimumFontScale={0.8}>
-            ATTORNEY DASHBOARD
-          </Text>
-        </View>
-        <View style={styles.navRight}>
-          <TouchableOpacity style={styles.navButton}>
-            <Text style={styles.bellIcon}>🔔</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.profileContainer}
-            onPress={() => navigation.navigate('AttyProfileSettings')}>
-            <View style={styles.profileCircle} />
-            <View style={styles.pendingBadge}>
-              <Text style={styles.badgeText}>PENDING</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
+        <Text style={[styles.headerTitle, isSmallScreen && styles.headerTitleSmall]} numberOfLines={1}>
+          ATTORNEY DASHBOARD
+        </Text>
+        <TouchableOpacity style={styles.iconCircle} onPress={onProfile} accessibilityLabel="Profile settings">
+          <LinearGradient
+            colors={['rgba(212,175,55,0.35)', 'rgba(18,26,36,0.9)']}
+            style={styles.profileGradient}>
+            <MaterialCommunityIcons name="account" size={20} color={accentGold} />
+          </LinearGradient>
+        </TouchableOpacity>
       </View>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, isSmallScreen && styles.scrollContentSmall]}>
-        <Text style={[styles.welcomeText, isSmallScreen && styles.welcomeTextSmall]} numberOfLines={2}>
-          {greetingName
-            ? `Welcome back, Atty. ${greetingName}`
-            : 'Welcome back, Attorney'}
-        </Text>
-        <Text style={styles.subtitle}>Here&apos;s what&apos;s happening with your practice today.</Text>
+        <View style={styles.welcomeBox}>
+          <Text style={[styles.welcomeText, isSmallScreen && styles.welcomeTextSmall]} numberOfLines={2}>
+            {greetingName
+              ? `Welcome back, Atty. ${greetingName}`
+              : 'Welcome back, Attorney'}
+          </Text>
+          <Text style={styles.subtitle}>
+            Here&apos;s what&apos;s happening with your practice today.
+          </Text>
+        </View>
 
         <TouchableOpacity
-          style={styles.manageAvailabilityBtn}
-          onPress={() => navigation.navigate('AttyAvailabilityManager')}>
-          <Text style={styles.btnIcon}>📅</Text>
-          <Text style={styles.btnText}>Manage Availability</Text>
+          activeOpacity={0.88}
+          onPress={() => {
+            Haptics.selectionAsync();
+            navigation.navigate('AttyAvailabilityManager');
+          }}
+          style={styles.actionCard}>
+          <LinearGradient
+            colors={['rgba(14,20,30,0.92)', 'rgba(18,26,36,0.75)']}
+            style={styles.actionGradient}>
+            <View style={styles.actionIconBox}>
+              <MaterialCommunityIcons name="calendar-clock" size={22} color={accentGold} />
+            </View>
+            <Text style={styles.actionText}>Manage Availability</Text>
+            <MaterialCommunityIcons name="chevron-right" size={22} color={T.textMuted} />
+          </LinearGradient>
         </TouchableOpacity>
 
-        <View style={styles.statsRow}>
-          <TouchableOpacity
-            style={[styles.statCard, isSmallScreen && styles.statCardSmall]}
-            onPress={() => navigation.navigate('AttyConsultationRequest')}>
-            <View style={[styles.iconCircle, {backgroundColor: '#FEF3C7'}]}>
-              <Text style={{color: '#D97706'}}>🕒</Text>
-            </View>
-            <Text style={styles.statLabel}>PENDING{'\n'}CONSULTATIONS</Text>
-            <Text style={[styles.statNumber, isSmallScreen && styles.statNumberSmall]}>
-              {loading ? '--' : pendingCount}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.statCard, isSmallScreen && styles.statCardSmall]}
-            onPress={() => navigation.navigate('AttyMyAppointments')}>
-            <View style={[styles.iconCircle, {backgroundColor: '#DBEAFE'}]}>
-              <Text style={{color: '#2563EB'}}>📅</Text>
-            </View>
-            <Text style={styles.statLabel}>UPCOMING{'\n'}APPOINTMENTS</Text>
-            <Text style={[styles.statNumber, isSmallScreen && styles.statNumberSmall]}>
-              {loading ? '--' : upcomingCount}
-            </Text>
-          </TouchableOpacity>
-        </View>
+        <Pressable
+          onPressIn={handleUpcomingPressIn}
+          onPressOut={handleUpcomingPressOut}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            navigation.navigate('AttyMyAppointments');
+          }}
+          style={styles.singleStatWrap}>
+          <Animated.View
+            style={[
+              styles.upcomingAnimatedOuter,
+              {transform: [{scale: upcomingCombinedScale}]},
+            ]}>
+            <LinearGradient
+              colors={['rgba(18,28,44,0.95)', 'rgba(12,19,30,0.88)']}
+              style={styles.singleStatCard}>
+              <View style={[styles.gridIcon, {backgroundColor: 'rgba(54, 74, 110, 0.35)'}]}>
+                <MaterialCommunityIcons name="calendar-month" size={22} color={accentGold} />
+              </View>
+              <Text style={styles.gridLabel}>UPCOMING APPOINTMENTS</Text>
+              <Text style={[styles.gridValue, isSmallScreen && styles.gridValueSmall]}>
+                {loading ? '--' : upcomingCount}
+              </Text>
+              <Text style={styles.gridHint}>Tap to view and manage</Text>
+            </LinearGradient>
+          </Animated.View>
+        </Pressable>
 
         <View style={styles.sectionCard}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Recent Consultations</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('AttyConsultationRequest')}>
+            <TouchableOpacity
+              onPress={() => {
+                Haptics.selectionAsync();
+                navigation.navigate('AttyMyAppointments');
+              }}>
               <Text style={styles.viewAll}>VIEW ALL ›</Text>
             </TouchableOpacity>
           </View>
 
           {loading ? (
             <View style={styles.centerBox}>
-              <ActivityIndicator color="#1E293B" />
+              <ActivityIndicator color={accentGold} />
             </View>
           ) : recentConsultations.length === 0 ? (
             <View style={styles.centerBox}>
@@ -237,127 +284,236 @@ const AttorneyDashboard = ({navigation}) => {
             recentConsultations.map(item => (
               <TouchableOpacity
                 key={item.id}
-                style={styles.consultationRow}
-                onPress={() => navigation.navigate('AttyConsultationRequest')}>
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>{item.initial}</Text>
+                style={styles.consultItem}
+                activeOpacity={0.88}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  navigation.navigate('AttyConsultationMessage', {
+                    chatId: item.id,
+                    clientName: item.name,
+                    clientInitials: (item.name || 'Client')
+                      .split(' ')
+                      .filter(Boolean)
+                      .map(part => part[0])
+                      .join('')
+                      .slice(0, 2)
+                      .toUpperCase(),
+                  });
+                }}>
+                <View style={styles.consultAvatar}>
+                  <Text style={styles.avatarTxt}>{item.initial}</Text>
                 </View>
-                <View style={styles.consultInfo}>
-                  <Text style={styles.clientName} numberOfLines={1}>
+                <View style={styles.consultMain}>
+                  <Text style={styles.consultName} numberOfLines={1}>
                     {item.name}
                   </Text>
-                  <Text style={styles.legalType}>{String(item.type).toUpperCase()}</Text>
-                  <Text style={styles.dateInfo}>{item.date}</Text>
+                  <Text style={styles.consultSub}>{String(item.type).toUpperCase()}</Text>
+                  <Text style={styles.consultDate}>{item.date}</Text>
                 </View>
-                <View style={styles.statusCol}>
-                  <View style={styles.pendingTag}>
-                    <Text style={styles.tagText}>{item.status}</Text>
+                <View style={styles.consultMeta}>
+                  <View style={styles.statusPill}>
+                    <Text style={styles.statusText}>{item.status}</Text>
                   </View>
-                  <Text style={styles.timeText}>{item.time}</Text>
+                  <Text style={styles.consultTime}>{item.time}</Text>
                 </View>
               </TouchableOpacity>
             ))
           )}
         </View>
 
-        <View style={styles.growthBanner}>
-          <Text style={[styles.growthTitle, isSmallScreen && styles.growthTitleSmall]}>
+        <LinearGradient
+          colors={['rgba(9,13,21,0.95)', 'rgba(14,20,31,0.88)']}
+          style={styles.promoCard}>
+          <Text style={[styles.promoTitle, isSmallScreen && styles.promoTitleSmall]}>
             Grow your law{'\n'}practice
           </Text>
-          <Text style={styles.growthSub}>
-            Keep your availability updated to receive more consultation requests from premium clients.
+          <Text style={styles.promoDesc}>
+            Keep your availability updated so clients can book paid consultations in your open slots.
           </Text>
-          <TouchableOpacity style={styles.scheduleBtn} onPress={() => navigation.navigate('AttyAvailabilityManager')}>
-            <Text style={styles.scheduleBtnText}>Manage My Schedule</Text>
+          <TouchableOpacity
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              navigation.navigate('AttyAvailabilityManager');
+            }}
+            activeOpacity={0.9}>
+            <LinearGradient colors={[T.gold[0], T.gold[1]]} style={styles.promoButton}>
+              <Text style={styles.promoButtonText}>Manage My Schedule</Text>
+            </LinearGradient>
           </TouchableOpacity>
-        </View>
-
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>PERFORMANCE METRICS</Text>
-          <MetricBar label="PROFILE VISIBILITY" percentage={85} color="#D9B041" value={85} />
-          <MetricBar label="CLIENT SATISFACTION" percentage={94} color="#10B981" value={94} />
-          <MetricBar label="RESPONSE RATE" percentage={98} color="#1E293B" value={98} />
-        </View>
+        </LinearGradient>
       </ScrollView>
-    </SafeAreaView>
+    </ClientScreenShell>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {flex: 1, backgroundColor: '#F8FAFC'},
-  navbar: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    backgroundColor: 'white',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    height: 56,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: 'rgba(244, 215, 139, 0.08)',
   },
-  navButton: {width: 36, height: 36, alignItems: 'center', justifyContent: 'center'},
-  navTitleWrap: {flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6},
-  navTitle: {fontSize: 16, fontWeight: 'bold', color: '#1E293B'},
-  navTitleSmall: {fontSize: 14},
-  navRight: {flexDirection: 'row', alignItems: 'center'},
-  profileContainer: {position: 'relative'},
-  profileCircle: {width: 32, height: 32, borderRadius: 16, backgroundColor: '#CBD5E1', marginLeft: 4},
-  pendingBadge: {position: 'absolute', bottom: -5, right: -5, backgroundColor: '#D9B041', paddingHorizontal: 4, borderRadius: 4},
-  badgeText: {fontSize: 6, color: 'white', fontWeight: 'bold'},
-  menuIcon: {fontSize: 20, color: '#1E293B'},
-  bellIcon: {fontSize: 17},
-  scrollContent: {padding: 20, paddingBottom: 28},
+  headerTitle: {
+    flex: 1,
+    textAlign: 'center',
+    color: T.text,
+    fontSize: 13,
+    fontWeight: '900',
+    letterSpacing: 2,
+  },
+  headerTitleSmall: {fontSize: 11, letterSpacing: 1},
+  iconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  profileGradient: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: glassBorder,
+  },
+  scrollContent: {padding: 20, paddingBottom: 40},
   scrollContentSmall: {paddingHorizontal: 14},
-  welcomeText: {fontSize: 24, fontWeight: 'bold', color: '#1E293B'},
+  welcomeBox: {
+    marginBottom: 20,
+    padding: 18,
+    borderRadius: 18,
+    backgroundColor: 'rgba(14, 20, 31, 0.55)',
+    borderWidth: 1,
+    borderColor: 'rgba(244, 215, 139, 0.08)',
+  },
+  welcomeText: {color: T.text, fontSize: 24, fontWeight: '900'},
   welcomeTextSmall: {fontSize: 21},
-  subtitle: {color: '#64748B', marginTop: 4, marginBottom: 20},
-  manageAvailabilityBtn: {
+  subtitle: {color: T.textMuted, fontSize: 14, marginTop: 6},
+  actionCard: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(186, 154, 91, 0.24)',
+    marginBottom: 20,
+  },
+  actionGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    backgroundColor: 'white',
+    padding: 18,
   },
-  btnIcon: {fontSize: 20},
-  btnText: {fontWeight: 'bold', marginLeft: 8, color: '#1E293B'},
-  statsRow: {flexDirection: 'row', justifyContent: 'space-between', marginTop: 20, gap: 10},
-  statCard: {flex: 1, backgroundColor: 'white', padding: 16, borderRadius: 20, elevation: 2},
-  statCardSmall: {padding: 12},
-  iconCircle: {width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginBottom: 15},
-  statLabel: {fontSize: 10, fontWeight: 'bold', color: '#94A3B8'},
-  statNumber: {fontSize: 32, fontWeight: 'bold', color: '#1E293B', marginTop: 5},
-  statNumberSmall: {fontSize: 26},
-  sectionCard: {backgroundColor: 'white', borderRadius: 20, padding: 20, marginTop: 20},
-  sectionHeader: {flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20},
-  sectionTitle: {fontSize: 18, fontWeight: 'bold', color: '#1E293B'},
-  viewAll: {color: '#D9B041', fontWeight: 'bold', fontSize: 12},
+  actionIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(215, 177, 74, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
+  },
+  actionText: {flex: 1, color: T.text, fontSize: 16, fontWeight: '800'},
+  singleStatWrap: {marginBottom: 8},
+  upcomingAnimatedOuter: {
+    borderRadius: 24,
+    overflow: 'hidden',
+  },
+  singleStatCard: {
+    borderRadius: 24,
+    padding: 22,
+    borderWidth: 1,
+    borderColor: glassBorder,
+  },
+  gridIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  gridLabel: {
+    color: T.textSoft,
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.6,
+  },
+  gridValue: {color: T.text, fontSize: 36, fontWeight: '900', marginTop: 6},
+  gridValueSmall: {fontSize: 30},
+  gridHint: {color: T.textSoft, fontSize: 12, marginTop: 8},
+  sectionCard: {
+    marginTop: 18,
+    borderRadius: 24,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 157, 95, 0.18)',
+    backgroundColor: 'rgba(12, 19, 30, 0.86)',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  sectionTitle: {color: T.text, fontSize: 18, fontWeight: '900'},
+  viewAll: {color: accentGold, fontSize: 11, fontWeight: '900'},
   centerBox: {paddingVertical: 20, alignItems: 'center'},
-  emptyText: {fontSize: 13, color: '#64748B'},
-  consultationRow: {flexDirection: 'row', paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: '#F1F5F9'},
-  avatar: {width: 45, height: 45, borderRadius: 12, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center'},
-  avatarText: {fontWeight: 'bold', color: '#1E293B'},
-  consultInfo: {flex: 1, marginLeft: 15},
-  clientName: {fontWeight: 'bold', color: '#1E293B'},
-  legalType: {fontSize: 10, color: '#94A3B8', marginTop: 2},
-  dateInfo: {fontSize: 12, color: '#64748B', marginTop: 8},
-  statusCol: {alignItems: 'flex-end', minWidth: 88},
-  pendingTag: {backgroundColor: '#FEF9C3', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6},
-  tagText: {fontSize: 10, color: '#854D0E', fontWeight: 'bold'},
-  timeText: {fontSize: 12, color: '#64748B', marginTop: 10},
-  growthBanner: {backgroundColor: '#0F172A', borderRadius: 24, padding: 25, marginTop: 20},
-  growthTitle: {color: 'white', fontSize: 26, fontWeight: 'bold'},
-  growthTitleSmall: {fontSize: 22},
-  growthSub: {color: '#94A3B8', marginTop: 15, lineHeight: 20},
-  scheduleBtn: {backgroundColor: '#D9B041', padding: 18, borderRadius: 16, marginTop: 20},
-  scheduleBtnText: {textAlign: 'center', fontWeight: 'bold', color: '#1E293B'},
-  metricContainer: {marginTop: 20},
-  metricHeader: {flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8},
-  metricLabel: {fontSize: 11, fontWeight: 'bold', color: '#94A3B8'},
-  metricValue: {fontSize: 11, fontWeight: 'bold', color: '#1E293B'},
-  progressBarBg: {height: 6, backgroundColor: '#F1F5F9', borderRadius: 3},
-  progressBarFill: {height: 6, borderRadius: 3},
+  emptyText: {fontSize: 13, color: T.textMuted},
+  consultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(12, 19, 30, 0.86)',
+    padding: 16,
+    borderRadius: 20,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.04)',
+  },
+  consultAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarTxt: {color: T.text, fontWeight: '900', fontSize: 18},
+  consultMain: {flex: 1, marginLeft: 14},
+  consultName: {color: T.text, fontSize: 15, fontWeight: '800'},
+  consultSub: {color: T.textSoft, fontSize: 9, marginTop: 2},
+  consultDate: {color: T.textMuted, fontSize: 10, marginTop: 4},
+  consultMeta: {alignItems: 'flex-end'},
+  statusPill: {
+    backgroundColor: 'rgba(215, 177, 74, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  statusText: {color: accentGold, fontSize: 9, fontWeight: '900'},
+  consultTime: {color: T.textMuted, fontSize: 10, marginTop: 8},
+  promoCard: {
+    marginTop: 20,
+    padding: 24,
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: 'rgba(180, 146, 82, 0.2)',
+  },
+  promoTitle: {color: T.text, fontSize: 22, fontWeight: '900'},
+  promoTitleSmall: {fontSize: 19},
+  promoDesc: {color: '#9AA6BC', fontSize: 13, lineHeight: 20, marginTop: 12, marginBottom: 18},
+  promoButton: {
+    height: 52,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  promoButtonText: {color: '#101B2C', fontSize: 16, fontWeight: '900'},
 });
 
 export default AttorneyDashboard;

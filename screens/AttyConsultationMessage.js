@@ -11,8 +11,10 @@ import {
   ActivityIndicator,
   Keyboard,
 } from 'react-native';
-import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {MaterialCommunityIcons} from '@expo/vector-icons';
+import {ClientScreenShell} from '../components/ClientScreenShell';
+import {REFERENCE_THEME as T} from '../constants/referenceTheme';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import ChatMessageBody from '../components/ChatMessageBody';
@@ -254,12 +256,12 @@ export default function ConsultationChat({navigation, route}) {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+    <ClientScreenShell edges={['top', 'left', 'right']}>
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => (navigation.canGoBack() ? navigation.goBack() : null)}>
-            <ArrowLeft size={24} color="#111827" />
+            <ArrowLeft size={24} color={T.text} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Consultation</Text>
           {!isClosed ? (
@@ -295,7 +297,7 @@ export default function ConsultationChat({navigation, route}) {
             ListHeaderComponent={
               <>
                 <View style={styles.encryptedBadge}>
-                  <ShieldCheck size={14} color="#F59E0B" />
+                  <ShieldCheck size={14} color={T.gold[1]} />
                   <Text style={styles.encryptedText}>END-TO-END ENCRYPTED SECURE CHANNEL</Text>
                 </View>
                 {isClosed && (
@@ -322,7 +324,7 @@ export default function ConsultationChat({navigation, route}) {
             <View style={styles.inputContainer}>
               {!isClosed && (
                 <TouchableOpacity style={styles.attachmentBtn} onPress={handleAttachMenu}>
-                  <Paperclip size={20} color="#9CA3AF" />
+                  <Paperclip size={20} color={T.textMuted} />
                 </TouchableOpacity>
               )}
               <TextInput
@@ -330,7 +332,7 @@ export default function ConsultationChat({navigation, route}) {
                 value={message}
                 onChangeText={setMessage}
                 placeholder={isClosed ? 'Consultation ended' : 'Type your message...'}
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={T.textSoft}
                 multiline
                 maxHeight={100}
                 editable={!isClosed}
@@ -342,78 +344,78 @@ export default function ConsultationChat({navigation, route}) {
                   style={[styles.sendBtn, (isClosed || !message.trim()) && styles.sendBtnDisabled]}
                   onPress={handleSend}
                   disabled={isClosed || !message.trim()}>
-                  <Send size={20} color="#FFF" />
+                  <Send size={20} color="#101B2C" />
                 </TouchableOpacity>
               )}
             </View>
           </View>
         </View>
-    </SafeAreaView>
+    </ClientScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {flex: 1, backgroundColor: '#F8FAFC'},
   keyboardAvoid: {flex: 1},
   messagesList: {flex: 1},
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FFF',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: 'rgba(244, 215, 139, 0.1)',
     justifyContent: 'space-between',
   },
   headerTitle: {
     flex: 1,
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#1E3A8A',
-    fontFamily: Platform.OS === 'ios' ? 'Times New Roman' : 'serif',
-    marginLeft: 15,
+    fontSize: 20,
+    fontWeight: '900',
+    color: T.text,
+    marginLeft: 8,
   },
   endConsultationBtn: {
     paddingVertical: 6,
     paddingHorizontal: 10,
   },
   endConsultationBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#B45309',
+    fontSize: 12,
+    fontWeight: '800',
+    color: T.gold[1],
   },
   headerEndSpacer: {width: 1},
   closedBanner: {
-    backgroundColor: '#FFF7ED',
+    backgroundColor: 'rgba(194, 65, 12, 0.2)',
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 12,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#FED7AA',
+    borderColor: 'rgba(251, 191, 36, 0.35)',
   },
   closedBannerText: {
-    color: '#C2410C',
+    color: T.gold[0],
     fontSize: 12,
     textAlign: 'center',
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   clientBar: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: '#FFF',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(244, 215, 139, 0.08)',
   },
   avatarContainer: {position: 'relative'},
   avatar: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#E0F2FE',
+    backgroundColor: 'rgba(215, 177, 74, 0.15)',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(244, 215, 139, 0.25)',
   },
-  avatarText: {color: '#0369A1', fontWeight: 'bold', fontSize: 16},
+  avatarText: {color: T.gold[1], fontWeight: '800', fontSize: 16},
   onlineStatus: {
     position: 'absolute',
     bottom: 0,
@@ -423,29 +425,25 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: '#22C55E',
     borderWidth: 1.5,
-    borderColor: '#FFF',
+    borderColor: T.base,
   },
-  clientName: {marginLeft: 12, fontSize: 16, fontWeight: '700', color: '#1E3A8A'},
+  clientName: {marginLeft: 12, fontSize: 16, fontWeight: '800', color: T.text},
   encryptedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'center',
-    backgroundColor: '#FFF',
+    backgroundColor: 'rgba(12, 19, 30, 0.85)',
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 20,
     marginVertical: 20,
     borderWidth: 1,
-    borderColor: '#F1F5F9',
-    elevation: 1,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 1},
-    shadowOpacity: 0.05,
+    borderColor: 'rgba(244, 215, 139, 0.2)',
   },
   encryptedText: {
     fontSize: 10,
-    color: '#94A3B8',
-    fontWeight: 'bold',
+    color: T.textMuted,
+    fontWeight: '800',
     marginLeft: 6,
     letterSpacing: 0.5,
   },
@@ -459,49 +457,51 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   clientBubble: {
-    backgroundColor: '#0F172A',
+    backgroundColor: 'rgba(18, 26, 36, 0.95)',
     borderTopLeftRadius: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(244, 215, 139, 0.12)',
   },
   myBubble: {
-    backgroundColor: '#FFF',
+    backgroundColor: 'rgba(244, 215, 139, 0.18)',
     borderBottomRightRadius: 2,
     borderWidth: 1,
-    borderColor: '#F1F5F9',
+    borderColor: 'rgba(244, 215, 139, 0.35)',
   },
   messageText: {fontSize: 15, lineHeight: 22},
-  clientText: {color: '#FFF'},
-  myText: {color: '#1E3A8A'},
-  timeText: {fontSize: 11, color: '#94A3B8', marginTop: 2},
+  clientText: {color: T.text},
+  myText: {color: T.text},
+  timeText: {fontSize: 11, color: T.textSoft, marginTop: 2},
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingTop: 16,
     paddingHorizontal: 16,
-    backgroundColor: '#FFF',
+    backgroundColor: 'rgba(4, 7, 11, 0.92)',
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: 'rgba(244, 215, 139, 0.12)',
   },
   inputContainer: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: 'rgba(18, 26, 36, 0.85)',
     borderRadius: 25,
     paddingHorizontal: 12,
     marginRight: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(244, 215, 139, 0.15)',
   },
   input: {
     flex: 1,
     paddingVertical: 10,
     paddingHorizontal: 8,
     fontSize: 15,
-    color: '#1E293B',
+    color: T.text,
     maxHeight: 100,
   },
   inputDisabled: {
-    color: '#94A3B8',
+    color: T.textSoft,
     backgroundColor: 'transparent',
   },
   attachmentBtn: {padding: 4},
@@ -509,12 +509,12 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#0F172A',
+    backgroundColor: T.gold[1],
     justifyContent: 'center',
     alignItems: 'center',
   },
   sendBtnDisabled: {
-    backgroundColor: '#CBD5E1',
+    backgroundColor: 'rgba(148, 163, 184, 0.5)',
   },
   backButton: {padding: 4},
 });

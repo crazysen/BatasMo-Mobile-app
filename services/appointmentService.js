@@ -217,6 +217,14 @@ export function formatScheduledAtDisplay(isoDateTime) {
   };
 }
 
+function appointmentTransactionsArePaid(transactions) {
+  if (transactions == null) {
+    return false;
+  }
+  const list = Array.isArray(transactions) ? transactions : [transactions];
+  return list.some(t => String(t?.payment_status ?? '').toLowerCase() === 'paid');
+}
+
 export async function getMyAppointments(options = {}) {
   const force = Boolean(options?.force);
   const cacheIsFresh = Array.isArray(appointmentsCache.data) && Date.now() - appointmentsCache.updatedAt < APPOINTMENTS_CACHE_TTL_MS;
@@ -225,16 +233,21 @@ export async function getMyAppointments(options = {}) {
     return appointmentsCache.data;
   }
 
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return [];
+  const {
+    data: {session},
+  } = await supabase.auth.getSession();
+  const user = session?.user;
+  if (!user) {
+    return [];
+  }
 
-  // Assuming you have foreign key relationships in Supabase from appointments to profiles
   const { data, error } = await supabase
     .from('appointments')
     .select(`
       *,
       client:client_id (full_name),
-      attorney:attorney_id (full_name)
+      attorney:attorney_id (full_name),
+      transactions (payment_status)
     `)
     .or(`client_id.eq.${user.id},attorney_id.eq.${user.id}`)
     .order('created_at', { ascending: false });
@@ -243,15 +256,45 @@ export async function getMyAppointments(options = {}) {
     throw new Error(error.message);
   }
 
-  // Map nested objects to top-level properties to match frontend expectations
-  const mapped = (data || []).map(row => ({
-    ...row,
-    client_name: Array.isArray(row.client) ? row.client[0]?.full_name : row.client?.full_name,
-    attorney_name: Array.isArray(row.attorney) ? row.attorney[0]?.full_name : row.attorney?.full_name,
-  }));
+  const mapped = (data || []).map(row => {
+    const payment_is_paid = appointmentTransactionsArePaid(row.transactions);
+    const {transactions: _tx, ...rest} = row;
+    return {
+      ...rest,
+      client_name: Array.isArray(row.client) ? row.client[0]?.full_name : row.client?.full_name,
+      attorney_name: Array.isArray(row.attorney) ? row.attorney[0]?.full_name : row.attorney?.full_name,
+      payment_is_paid,
+    };
+  });
+
+  // Web (and other) flows may leave status as pending even after payment; sync so chat room + UI match mobile paid-first behavior.
+  const toConfirm = mapped.filter(
+    r =>
+      r.attorney_id === user.id &&
+      String(r.status ?? '').toLowerCase() === 'pending' &&
+      r.payment_is_paid,
+  );
+  let result = mapped;
+  if (toConfirm.length > 0) {
+    const ids = toConfirm.map(r => r.id);
+    const now = new Date().toISOString();
+    const {error: syncErr} = await supabase
+      .from('appointments')
+      .update({
+        status: 'confirmed',
+        updated_at: now,
+      })
+      .in('id', ids);
+    if (!syncErr) {
+      const idSet = new Set(ids);
+      result = mapped.map(r =>
+        idSet.has(r.id) ? {...r, status: 'confirmed', updated_at: now} : r,
+      );
+    }
+  }
 
   appointmentsCache = {
-    data: mapped,
+    data: result,
     updatedAt: Date.now(),
   };
 

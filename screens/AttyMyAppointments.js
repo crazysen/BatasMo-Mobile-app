@@ -9,13 +9,17 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
+import {LinearGradient} from 'expo-linear-gradient';
 import {MaterialCommunityIcons} from '@expo/vector-icons';
 import {
   formatAppointmentNotesForDisplay,
   getMyAppointments,
   updateAppointmentStatus,
 } from '../services/appointmentService';
+import {ClientScreenShell} from '../components/ClientScreenShell';
+import {REFERENCE_THEME as T} from '../constants/referenceTheme';
+
+const accentGold = T.gold[1];
 
 function resolveScheduleValue(item) {
   return (
@@ -24,6 +28,15 @@ function resolveScheduleValue(item) {
     item?.created_at ||
     null
   );
+}
+
+/** Paid bookings should not require attorney approval (aligned with mobile payment-first flow). */
+function getEffectiveStatus(item) {
+  const s = (item.status ?? 'pending').toLowerCase();
+  if (s === 'pending' && item.payment_is_paid) {
+    return 'confirmed';
+  }
+  return s;
 }
 
 function formatDateTime(isoDateTime) {
@@ -98,10 +111,12 @@ export default function AttyMyAppointments({navigation}) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ClientScreenShell edges={['top']}>
       <View style={styles.navHeader}>
-        <TouchableOpacity onPress={() => navigation.canGoBack() ? navigation.goBack() : null}>
-          <MaterialCommunityIcons name="chevron-left" size={28} color="#111827" />
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => (navigation.canGoBack() ? navigation.goBack() : null)}>
+          <MaterialCommunityIcons name="chevron-left" size={28} color={T.text} />
         </TouchableOpacity>
         <Text style={styles.navTitle}>My Appointments</Text>
       </View>
@@ -113,17 +128,18 @@ export default function AttyMyAppointments({navigation}) {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {loading ? (
           <View style={styles.emptyCard}>
-            <ActivityIndicator color="#0F172A" />
+            <ActivityIndicator color={accentGold} />
             <Text style={styles.emptyText}>Loading appointments...</Text>
           </View>
         ) : appointments.length === 0 ? (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyTitle}>No appointment requests yet</Text>
-            <Text style={styles.emptyText}>Client consultation requests will appear here.</Text>
+            <Text style={styles.emptyText}>Paid and scheduled consultations will appear here.</Text>
           </View>
         ) : (
           appointments.map(item => {
-            const status = (item.status ?? 'PENDING').toUpperCase();
+            const effective = getEffectiveStatus(item);
+            const status = effective.toUpperCase();
             const {date, time} = formatDateTime(resolveScheduleValue(item));
             return (
               <View key={item.id} style={styles.card}>
@@ -138,15 +154,19 @@ export default function AttyMyAppointments({navigation}) {
                 </View>
 
                 <View style={styles.metaRow}>
-                  <Text style={styles.metaText}>📅 {date}</Text>
-                  <Text style={styles.metaText}>🕒 {time}</Text>
+                  <Text style={styles.metaText}>
+                    <MaterialCommunityIcons name="calendar" size={14} color={T.textMuted} /> {date}
+                  </Text>
+                  <Text style={[styles.metaText, {marginLeft: 16}]}>
+                    <MaterialCommunityIcons name="clock-outline" size={14} color={T.textMuted} /> {time}
+                  </Text>
                 </View>
 
                 <Text style={styles.notesText}>
-                  📝 {formatAppointmentNotesForDisplay(item.notes) || 'No notes provided'}
+                  {formatAppointmentNotesForDisplay(item.notes) || 'No notes provided'}
                 </Text>
 
-                {status === 'PENDING' && (
+                {effective === 'pending' && (
                   <View style={styles.actionRow}>
                     <TouchableOpacity
                       style={[styles.actionButton, styles.rejectButton]}
@@ -177,7 +197,9 @@ export default function AttyMyAppointments({navigation}) {
                             .toUpperCase(),
                         })
                       }>
-                      <Text style={styles.consultBtnText}>Enter Consultation</Text>
+                      <LinearGradient colors={[T.gold[0], T.gold[1]]} style={styles.gradBtn}>
+                        <Text style={styles.gradBtnText}>Enter Consultation</Text>
+                      </LinearGradient>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.rescheduleBtn}
@@ -213,7 +235,9 @@ export default function AttyMyAppointments({navigation}) {
                           .toUpperCase(),
                       })
                     }>
-                    <Text style={styles.consultBtnText}>View Messages</Text>
+                    <LinearGradient colors={[T.gold[0], T.gold[1]]} style={styles.gradBtn}>
+                      <Text style={styles.gradBtnText}>View Messages</Text>
+                    </LinearGradient>
                   </TouchableOpacity>
                 )}
               </View>
@@ -221,37 +245,36 @@ export default function AttyMyAppointments({navigation}) {
           })
         )}
       </ScrollView>
-    </SafeAreaView>
+    </ClientScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {flex: 1, backgroundColor: '#F9FAFB'},
   navHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(244, 215, 139, 0.08)',
   },
+  backBtn: {width: 44, height: 44, justifyContent: 'center'},
   navTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#111827',
-    marginLeft: 8,
+    fontSize: 22,
+    fontWeight: '900',
+    color: T.text,
+    marginLeft: 4,
   },
-  subHeader: {paddingHorizontal: 20, marginTop: 8, marginBottom: 20},
-  subTitle: {color: '#6B7280', fontSize: 14},
+  subHeader: {paddingHorizontal: 20, marginTop: 8, marginBottom: 16},
+  subTitle: {color: T.textMuted, fontSize: 14},
   scrollContent: {paddingHorizontal: 20, paddingBottom: 30},
   card: {
-    backgroundColor: '#FFF',
+    backgroundColor: 'rgba(12, 19, 30, 0.92)',
     borderRadius: 20,
-    padding: 20,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 3,
+    padding: 18,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(244, 215, 139, 0.12)',
   },
   cardHeader: {
     flexDirection: 'row',
@@ -259,58 +282,61 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: 12,
   },
-  name: {fontSize: 18, fontWeight: 'bold', color: '#1F2937'},
-  specialty: {fontSize: 14, color: '#6B7280', marginTop: 2},
+  name: {fontSize: 18, fontWeight: '800', color: T.text},
+  specialty: {fontSize: 14, color: T.textMuted, marginTop: 2},
   statusBadge: {
-    backgroundColor: '#0F172A',
+    backgroundColor: 'rgba(215, 177, 74, 0.15)',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
   },
-  statusBadgeText: {color: '#FFF', fontSize: 10, fontWeight: '700'},
-  metaRow: {flexDirection: 'row', gap: 18, marginBottom: 10},
-  metaText: {color: '#374151', fontSize: 13},
-  notesText: {color: '#475569', fontSize: 13},
-  actionRow: {flexDirection: 'row', gap: 10, marginTop: 14},
+  statusBadgeText: {color: accentGold, fontSize: 10, fontWeight: '800'},
+  metaRow: {flexDirection: 'row', flexWrap: 'wrap', marginBottom: 10},
+  metaText: {color: T.textMuted, fontSize: 13},
+  notesText: {color: T.textSoft, fontSize: 13},
+  actionRow: {flexDirection: 'row', marginTop: 14},
   actionButton: {
     flex: 1,
     height: 44,
-    borderRadius: 10,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  rejectButton: {backgroundColor: '#FEE2E2'},
-  approveButton: {backgroundColor: '#DCFCE7'},
-  rejectButtonText: {color: '#B91C1C', fontWeight: '700'},
-  approveButtonText: {color: '#166534', fontWeight: '700'},
+  rejectButton: {backgroundColor: 'rgba(254, 226, 226, 0.95)', marginRight: 8},
+  approveButton: {backgroundColor: 'rgba(220, 252, 231, 0.95)'},
+  rejectButtonText: {color: '#B91C1C', fontWeight: '800'},
+  approveButtonText: {color: '#166534', fontWeight: '800'},
   consultBtn: {
     marginTop: 14,
-    backgroundColor: '#0F172A',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  gradBtn: {
     height: 44,
-    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 16,
   },
-  confirmedActionRow: {flexDirection: 'row', gap: 10, marginTop: 14},
-  consultBtnHalf: {flex: 1, marginTop: 0},
-  consultBtnText: {color: '#FFF', fontWeight: '700'},
+  gradBtnText: {color: '#101B2C', fontWeight: '800'},
+  confirmedActionRow: {flexDirection: 'row', marginTop: 14},
+  consultBtnHalf: {flex: 1, marginTop: 0, marginRight: 8},
   rescheduleBtn: {
     flex: 1,
-    backgroundColor: '#EAB308',
+    backgroundColor: 'rgba(234, 179, 8, 0.95)',
     height: 44,
-    borderRadius: 10,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  rescheduleBtnText: {color: '#1E293B', fontWeight: '700'},
+  rescheduleBtnText: {color: '#1E293B', fontWeight: '800'},
   emptyCard: {
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(244, 215, 139, 0.15)',
     borderRadius: 16,
-    backgroundColor: '#FFFFFF',
-    padding: 20,
+    backgroundColor: 'rgba(12, 19, 30, 0.6)',
+    padding: 24,
     alignItems: 'center',
   },
-  emptyTitle: {fontSize: 16, fontWeight: '700', color: '#0F172A', marginBottom: 6},
-  emptyText: {fontSize: 13, color: '#64748B', textAlign: 'center'},
+  emptyTitle: {fontSize: 16, fontWeight: '800', color: T.text, marginBottom: 6},
+  emptyText: {fontSize: 13, color: T.textMuted, textAlign: 'center'},
 });

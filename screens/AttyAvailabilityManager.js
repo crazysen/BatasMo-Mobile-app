@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  SafeAreaView,
 } from 'react-native';
 import {useFocusEffect} from '@react-navigation/native';
 import {MaterialCommunityIcons} from '@expo/vector-icons';
@@ -18,6 +17,10 @@ import {
   setAvailability,
 } from '../services/appointmentService';
 import {supabase} from '../services/supabaseClient';
+import {ClientScreenShell} from '../components/ClientScreenShell';
+import {REFERENCE_THEME as T} from '../constants/referenceTheme';
+
+const accentGold = T.gold[1];
 
 const ChevronLeft = props => <MaterialCommunityIcons name="chevron-left" {...props} />;
 const ChevronRight = props => <MaterialCommunityIcons name="chevron-right" {...props} />;
@@ -82,7 +85,7 @@ export default function AvailabilityManager({navigation}) {
       setOpenSlotKeys(open);
       setBookedSlotKeys(bookedUi);
       setCompletedSlotKeys(completedSet);
-    } catch (e) {
+    } catch (_e) {
       Alert.alert('Error', 'Failed to load availability.');
     } finally {
       setLoading(false);
@@ -240,12 +243,12 @@ export default function AvailabilityManager({navigation}) {
   const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ClientScreenShell edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => (navigation.canGoBack() ? navigation.goBack() : null)}
           style={styles.backButton}>
-          <ChevronLeft color="#334155" size={28} />
+          <ChevronLeft color={T.text} size={28} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Availability Grid</Text>
       </View>
@@ -254,11 +257,11 @@ export default function AvailabilityManager({navigation}) {
         <View style={styles.calendarCard}>
           <View style={styles.calendarHeader}>
             <TouchableOpacity onPress={() => changeMonth(-1)} style={styles.arrowButton}>
-              <ChevronLeft color="#0F172A" size={24} />
+              <ChevronLeft color={accentGold} size={24} />
             </TouchableOpacity>
             <Text style={styles.monthText}>{monthLabel}</Text>
             <TouchableOpacity onPress={() => changeMonth(1)} style={styles.arrowButton}>
-              <ChevronRight color="#0F172A" size={24} />
+              <ChevronRight color={accentGold} size={24} />
             </TouchableOpacity>
           </View>
 
@@ -287,7 +290,7 @@ export default function AvailabilityManager({navigation}) {
 
           {loading ? (
             <View style={styles.loaderAreaCalendar}>
-              <ActivityIndicator size="small" color="#0EA5E9" />
+              <ActivityIndicator size="small" color={accentGold} />
             </View>
           ) : (
             <View style={styles.gridContainer}>
@@ -405,32 +408,28 @@ export default function AvailabilityManager({navigation}) {
           </TouchableOpacity>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </ClientScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {flex: 1, backgroundColor: '#F8FAFC'},
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
-    borderColor: '#F1F5F9',
-    backgroundColor: '#FFFFFF',
+    borderColor: 'rgba(244, 215, 139, 0.1)',
   },
   backButton: {marginRight: 12},
-  headerTitle: {fontSize: 22, fontWeight: '700', color: '#0F172A'},
+  headerTitle: {fontSize: 22, fontWeight: '900', color: T.text},
 
   calendarCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(12, 19, 30, 0.92)',
     margin: 16,
     borderRadius: 20,
     padding: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(244, 215, 139, 0.12)',
   },
   calendarHeader: {
     flexDirection: 'row',
@@ -439,21 +438,20 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   arrowButton: {padding: 4},
-  monthText: {fontSize: 18, fontWeight: 'bold', color: '#0F172A'},
+  monthText: {fontSize: 18, fontWeight: '800', color: T.text},
 
   legendRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
     marginBottom: 10,
-    gap: 4,
   },
-  legendItem: {flexDirection: 'row', alignItems: 'center', marginHorizontal: 8},
+  legendItem: {flexDirection: 'row', alignItems: 'center', marginHorizontal: 8, marginBottom: 4},
   legendDot: {width: 6, height: 6, borderRadius: 3, marginRight: 6},
-  legendDotOpen: {backgroundColor: '#0EA5E9'},
-  legendDotBooked: {backgroundColor: '#EA580C'},
-  legendDotCompleted: {backgroundColor: '#7C3AED'},
-  legendText: {fontSize: 11, color: '#64748B', fontWeight: '600'},
+  legendDotOpen: {backgroundColor: accentGold},
+  legendDotBooked: {backgroundColor: '#FB923C'},
+  legendDotCompleted: {backgroundColor: '#A78BFA'},
+  legendText: {fontSize: 11, color: T.textMuted, fontWeight: '600'},
 
   daysOfWeekRow: {
     flexDirection: 'row',
@@ -465,7 +463,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 12,
     fontWeight: '700',
-    color: '#94A3B8',
+    color: T.textSoft,
   },
 
   gridContainer: {
@@ -487,13 +485,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  dayCircleSelected: {backgroundColor: '#3B82F6'},
-  dayCircleToday: {backgroundColor: '#EFF6FF'},
+  dayCircleSelected: {backgroundColor: accentGold},
+  dayCircleToday: {backgroundColor: 'rgba(215, 177, 74, 0.14)'},
 
-  dayText: {fontSize: 16, fontWeight: '500', color: '#334155'},
-  dayTextDisabled: {color: '#CBD5E1'},
-  dayTextSelected: {color: '#FFFFFF', fontWeight: 'bold'},
-  dayTextToday: {color: '#2563EB', fontWeight: 'bold'},
+  dayText: {fontSize: 16, fontWeight: '500', color: T.text},
+  dayTextDisabled: {color: T.textSoft},
+  dayTextSelected: {color: '#101B2C', fontWeight: 'bold'},
+  dayTextToday: {color: T.gold[0], fontWeight: 'bold'},
 
   dotsRow: {
     flexDirection: 'row',
@@ -506,15 +504,15 @@ const styles = StyleSheet.create({
     width: 5,
     height: 5,
     borderRadius: 2.5,
-    backgroundColor: '#0EA5E9',
+    backgroundColor: accentGold,
     marginHorizontal: 2,
   },
-  dotSelected: {backgroundColor: '#BAE6FD', opacity: 1},
+  dotSelected: {backgroundColor: '#101B2C', opacity: 1},
   dotBooked: {
     width: 5,
     height: 5,
     borderRadius: 2.5,
-    backgroundColor: '#EA580C',
+    backgroundColor: '#FB923C',
     marginHorizontal: 2,
   },
   dotBookedSelected: {backgroundColor: '#FED7AA', opacity: 1},
@@ -522,26 +520,24 @@ const styles = StyleSheet.create({
     width: 5,
     height: 5,
     borderRadius: 2.5,
-    backgroundColor: '#7C3AED',
+    backgroundColor: '#A78BFA',
     marginHorizontal: 2,
   },
-  dotCompletedSelected: {backgroundColor: '#DDD6FE', opacity: 1},
+  dotCompletedSelected: {backgroundColor: '#E9D5FF', opacity: 1},
 
   loaderAreaCalendar: {height: 250, justifyContent: 'center', alignItems: 'center'},
 
   slotsCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(12, 19, 30, 0.92)',
     marginHorizontal: 16,
     marginBottom: 30,
     borderRadius: 20,
     padding: 20,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(244, 215, 139, 0.12)',
   },
-  selectedDateTitle: {fontSize: 18, fontWeight: '700', color: '#0F172A', marginBottom: 4},
-  subText: {fontSize: 13, color: '#64748B', marginBottom: 20},
+  selectedDateTitle: {fontSize: 18, fontWeight: '800', color: T.text, marginBottom: 4},
+  subText: {fontSize: 13, color: T.textMuted, marginBottom: 20},
 
   slotsGrid: {
     flexDirection: 'row',
@@ -552,40 +548,40 @@ const styles = StyleSheet.create({
   slotItem: {
     width: '31%',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: 'rgba(244, 215, 139, 0.15)',
     borderRadius: 12,
     paddingVertical: 10,
     alignItems: 'center',
     marginBottom: 12,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: 'rgba(4, 7, 11, 0.5)',
     minHeight: 56,
     justifyContent: 'center',
   },
   slotItemActive: {
-    backgroundColor: '#0369A1',
-    borderColor: '#0369A1',
+    backgroundColor: 'rgba(215, 177, 74, 0.35)',
+    borderColor: accentGold,
   },
   slotItemBooked: {
-    backgroundColor: '#FFF7ED',
-    borderColor: '#FDBA74',
+    backgroundColor: 'rgba(251, 146, 60, 0.12)',
+    borderColor: 'rgba(251, 146, 60, 0.45)',
     opacity: 1,
   },
   slotItemCompleted: {
-    backgroundColor: '#F5F3FF',
-    borderColor: '#C4B5FD',
+    backgroundColor: 'rgba(167, 139, 250, 0.12)',
+    borderColor: 'rgba(167, 139, 250, 0.4)',
   },
-  slotText: {fontWeight: '600', color: '#64748B', fontSize: 13},
-  slotTextActive: {color: '#FFFFFF'},
-  slotTextBooked: {fontWeight: '600', color: '#9A3412', fontSize: 12},
-  slotTextCompleted: {fontWeight: '600', color: '#5B21B6', fontSize: 12},
-  bookedLabel: {fontSize: 10, color: '#C2410C', fontWeight: '700', marginTop: 2},
-  completedLabel: {fontSize: 10, color: '#6D28D9', fontWeight: '700', marginTop: 2},
+  slotText: {fontWeight: '600', color: T.textMuted, fontSize: 13},
+  slotTextActive: {color: T.text},
+  slotTextBooked: {fontWeight: '600', color: '#FDBA74', fontSize: 12},
+  slotTextCompleted: {fontWeight: '600', color: '#C4B5FD', fontSize: 12},
+  bookedLabel: {fontSize: 10, color: '#FB923C', fontWeight: '700', marginTop: 2},
+  completedLabel: {fontSize: 10, color: '#A78BFA', fontWeight: '700', marginTop: 2},
 
   saveBtn: {
-    backgroundColor: '#0F172A',
+    backgroundColor: accentGold,
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
   },
-  saveBtnText: {color: '#FFFFFF', fontWeight: '700', fontSize: 16},
+  saveBtnText: {color: '#101B2C', fontWeight: '800', fontSize: 16},
 });

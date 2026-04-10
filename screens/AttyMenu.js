@@ -1,13 +1,18 @@
 import React from 'react';
-import {
-  Alert,
-  StyleSheet,
-  View,
-  Text,
-  TouchableOpacity,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { signOutCurrentUser } from '../services/authService';
+import {Image, ScrollView, StyleSheet, View, Text, TouchableOpacity} from 'react-native';
+import {LinearGradient} from 'expo-linear-gradient';
+import {MaterialCommunityIcons} from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import {signOutCurrentUser} from '../services/authService';
+import {ClientScreenShell} from '../components/ClientScreenShell';
+import {REFERENCE_THEME as T} from '../constants/referenceTheme';
+
+const ICONS = {
+  AttyLandingPage: 'view-dashboard-outline',
+  AttyAvailabilityManager: 'calendar-clock',
+  AttyMyAppointments: 'calendar-month',
+  AttyMyEarnings: 'cash',
+};
 
 const AttorneySidebar = ({navigation, route}) => {
   const stackState = navigation.getState();
@@ -17,28 +22,26 @@ const AttorneySidebar = ({navigation, route}) => {
   const activeRoute = route?.params?.activeRoute || previousRouteName;
 
   const menuItems = [
-    {id: '1', label: 'Dashboard', icon: '⊞', route: 'AttyLandingPage'},
-    {id: '2', label: 'My Schedule', icon: '🕒', route: 'AttyAvailabilityManager'},
-    {id: '3', label: 'Consultation Requests', icon: '📥', route: 'AttyConsultationRequest'},
-    {id: '4', label: 'Upcoming Appointments', icon: '📅', route: 'AttyMyAppointments'},
-    {id: '5', label: 'Notarial Requests', icon: '🛡️', route: 'AttyNotarialServices'},
-    {id: '6', label: 'Earnings', icon: '💵', route: 'AttyMyEarnings'},
+    {id: '1', label: 'Dashboard', route: 'AttyLandingPage'},
+    {id: '2', label: 'My Schedule', route: 'AttyAvailabilityManager'},
+    {id: '3', label: 'Upcoming Appointments', route: 'AttyMyAppointments'},
+    {id: '4', label: 'Earnings', route: 'AttyMyEarnings'},
   ];
 
   const handleMenuPress = item => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (item.route) {
       navigation.navigate(item.route);
-      return;
     }
-
-    Alert.alert(item.label, `${item.label} screen will be added next.`);
   };
 
   const handleIdentityPress = () => {
+    Haptics.selectionAsync();
     navigation.navigate('AttyProfileSettings');
   };
 
   const handleTerminate = async () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     try {
       await signOutCurrentUser();
     } catch {
@@ -51,29 +54,59 @@ const AttorneySidebar = ({navigation, route}) => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.sidebarContent}>
-        <View style={styles.logoRow}>
+    <ClientScreenShell edges={['top', 'bottom']}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}>
+        <View style={styles.brandRow}>
           <View style={styles.logoBox}>
-            <Text style={styles.logoIcon}>⚖️</Text>
+            <Image
+              source={require('../assets/images/logo.jpg')}
+              style={styles.logoImage}
+              resizeMode="cover"
+            />
           </View>
-          <Text style={styles.brandName}>BatasMo</Text>
+          <View style={styles.brandCopy}>
+            <Text style={styles.brandText}>BatasMo</Text>
+            <Text style={styles.brandSub}>Attorney Console</Text>
+          </View>
         </View>
 
         <View style={styles.navSection}>
           {menuItems.map(item => {
             const isActive = activeRoute === item.route;
+            const iconName = ICONS[item.route] || 'circle-small';
             return (
               <TouchableOpacity
                 key={item.id}
-                style={[styles.navItem, isActive && styles.activeNavItem]}
+                activeOpacity={0.88}
+                style={styles.navItemWrapper}
                 onPress={() => handleMenuPress(item)}>
-                <Text style={[styles.navIcon, isActive && styles.activeText]}>
-                  {item.icon}
-                </Text>
-                <Text style={[styles.navLabel, isActive && styles.activeText]}>
-                  {item.label}
-                </Text>
+                {isActive ? (
+                  <LinearGradient
+                    colors={['rgba(244,215,139,0.35)', 'rgba(215,177,74,0.92)']}
+                    start={{x: 0, y: 0}}
+                    end={{x: 1, y: 1}}
+                    style={styles.activeGradient}>
+                    <MaterialCommunityIcons
+                      name={iconName}
+                      size={22}
+                      color="#101B2C"
+                    />
+                    <Text style={styles.navTextActive}>{item.label}</Text>
+                    <View style={styles.activePill} />
+                  </LinearGradient>
+                ) : (
+                  <View style={styles.inactiveItem}>
+                    <MaterialCommunityIcons
+                      name={iconName}
+                      size={22}
+                      color={T.textMuted}
+                    />
+                    <Text style={styles.navText}>{item.label}</Text>
+                  </View>
+                )}
               </TouchableOpacity>
             );
           })}
@@ -81,114 +114,123 @@ const AttorneySidebar = ({navigation, route}) => {
 
         <View style={styles.divider} />
 
-        <TouchableOpacity style={styles.navItem} onPress={handleIdentityPress}>
-          <Text style={styles.navIcon}>👤</Text>
-          <Text style={styles.navLabel}>Identity</Text>
+        <TouchableOpacity style={styles.navItemWrapper} onPress={handleIdentityPress} activeOpacity={0.88}>
+          <View style={styles.inactiveItem}>
+            <MaterialCommunityIcons name="account-cog-outline" size={22} color={T.textMuted} />
+            <Text style={styles.navText}>Profile Settings</Text>
+          </View>
         </TouchableOpacity>
 
-        <View style={styles.footer}>
-          <TouchableOpacity style={styles.terminateBtn} onPress={handleTerminate}>
-            <Text style={styles.terminateIcon}>🚪</Text>
-            <Text style={styles.terminateText}>Terminate</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </SafeAreaView>
+        <TouchableOpacity style={styles.terminateBtn} onPress={handleTerminate} activeOpacity={0.88}>
+          <MaterialCommunityIcons name="logout" size={22} color="#FF5252" />
+          <Text style={styles.terminateText}>Log out</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </ClientScreenShell>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0F172A',
-  },
-  sidebarContent: {
-    padding: 24,
-    flex: 1,
-  },
-  logoRow: {
+  scroll: {flex: 1},
+  scrollContent: {padding: 20, paddingBottom: 36},
+  brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 40,
-    marginTop: 20,
+    marginBottom: 28,
+    marginTop: 8,
   },
   logoBox: {
-    width: 40,
-    height: 40,
-    backgroundColor: '#D9B041',
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(244, 215, 139, 0.24)',
+    backgroundColor: 'rgba(12, 19, 30, 0.9)',
   },
-  logoIcon: {
+  logoImage: {
+    width: '100%',
+    height: '100%',
+  },
+  brandCopy: {marginLeft: 14, flex: 1},
+  brandText: {
+    color: T.text,
     fontSize: 20,
-    color: '#0F172A',
-  },
-  brandName: {
-    fontSize: 24,
-    color: 'white',
-    fontWeight: 'bold',
+    fontWeight: '900',
     fontStyle: 'italic',
   },
-  navSection: {
-    marginTop: 10,
+  brandSub: {
+    color: T.textSoft,
+    fontSize: 11,
+    marginTop: 2,
+    letterSpacing: 0.5,
   },
-  navItem: {
+  navSection: {marginTop: 4},
+  navItemWrapper: {marginBottom: 10},
+  activeGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    marginBottom: 8,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
-  activeNavItem: {
-    backgroundColor: '#D9B041',
+  activePill: {
+    marginLeft: 'auto',
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(4,7,11,0.85)',
   },
-  navIcon: {
-    fontSize: 18,
-    color: '#94A3B8',
-    width: 30,
+  inactiveItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.024)',
+    borderWidth: 1,
+    borderColor: 'rgba(153, 180, 230, 0.13)',
   },
-  navLabel: {
-    fontSize: 15,
-    color: '#94A3B8',
-    fontWeight: '500',
+  navText: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginLeft: 12,
+    color: T.textMuted,
+    letterSpacing: 0.3,
+    flex: 1,
   },
-  activeText: {
-    color: '#0F172A',
-    fontWeight: 'bold',
+  navTextActive: {
+    fontSize: 14,
+    fontWeight: '800',
+    marginLeft: 12,
+    color: '#101B2C',
+    letterSpacing: 0.3,
+    flex: 1,
   },
   divider: {
     height: 1,
-    backgroundColor: '#1E293B',
-    marginVertical: 20,
-  },
-  footer: {
-    position: 'absolute',
-    bottom: 40,
-    left: 24,
-    right: 24,
+    backgroundColor: 'rgba(153, 180, 230, 0.22)',
+    marginVertical: 16,
   },
   terminateBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
+    marginTop: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    borderRadius: 14,
     backgroundColor: 'rgba(244,63,94,0.08)',
-  },
-  terminateIcon: {
-    fontSize: 18,
-    color: '#F43F5E',
-    marginRight: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(244,63,94,0.2)',
   },
   terminateText: {
     fontSize: 15,
-    color: '#F43F5E',
-    fontWeight: 'bold',
+    color: '#FF5252',
+    fontWeight: '800',
+    marginLeft: 12,
   },
 });
 
 export default AttorneySidebar;
-
