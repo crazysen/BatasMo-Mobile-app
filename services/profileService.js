@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { e164ToPhilippinesLocal11 } from './authService';
 
 export async function getMyProfile() {
   const { data: { user } } = await supabase.auth.getUser();
@@ -36,9 +37,23 @@ export async function updateMyProfile(payload) {
       avatarUrl = `data:image/jpeg;base64,${payload.avatar_base64}`;
   }
 
+  let phoneForDb = payload.phone;
+  if (phoneForDb !== undefined && phoneForDb !== null) {
+    const trimmed = String(phoneForDb).trim();
+    if (trimmed === '') {
+      phoneForDb = null;
+    } else {
+      const local = e164ToPhilippinesLocal11(trimmed);
+      if (!local) {
+        throw new Error('Enter a valid Philippine mobile number (09XXXXXXXXX).');
+      }
+      phoneForDb = local;
+    }
+  }
+
   const profileUpdate = {
     full_name: payload.full_name,
-    phone: payload.phone,
+    phone: phoneForDb,
     address: payload.address,
     age: payload.age,
     guardian_name: payload.guardian_name,

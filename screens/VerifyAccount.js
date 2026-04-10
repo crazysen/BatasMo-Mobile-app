@@ -4,7 +4,6 @@ import {
   Alert,
   Easing,
   ImageBackground,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,7 +13,18 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import {resendSignUpOtp, verifySignUpOtp} from '../services/authService';
+import {
+  e164ToPhilippinesLocal11,
+  maskPhilippinesPhone,
+  normalizePhilippinesToE164,
+  resendPhoneVerificationOtp,
+  requestPhoneVerificationSms,
+  verifyPhoneOtp,
+  upsertProfileFromVerificationPayload,
+} from '../services/authService';
+import { supabase } from '../services/supabaseClient';
+import {FONT_SERIF_DISPLAY} from '../constants/platformUi';
+import {useUserProfile} from '../context/UserProfileContext';
 
 const THEME = {
   gold: '#d4af37',
@@ -60,12 +70,19 @@ const PressScaleButton = ({
 };
 
 export default function VerifyAccount({navigation, route}) {
+  const {updateProfile} = useUserProfile();
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [isVerifying, setIsVerifying] = useState(false);
   const [isResending, setIsResending] = useState(false);
   const inputRefs = useRef([]);
-  const email = route?.params?.email || 'your email';
+
+  const paramPhoneE164 = route?.params?.phoneE164;
+  const email = route?.params?.email || '';
   const role = route?.params?.role || 'Client';
+  const profilePayload = route?.params?.profilePayload;
+  const isNewSignup = route?.params?.isNewSignup !== false;
+
+  const [phoneE164, setPhoneE164] = useState(paramPhoneE164 || null);
 
   const introOpacity = useRef(new Animated.Value(0)).current;
   const introTranslateY = useRef(new Animated.Value(20)).current;
@@ -75,6 +92,43 @@ export default function VerifyAccount({navigation, route}) {
   const auraA = useRef(new Animated.Value(0)).current;
   const auraB = useRef(new Animated.Value(0)).current;
   const buttonGlow = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (paramPhoneE164) {
+        setPhoneE164(paramPhoneE164);
+        return;
+      }
+      const {
+        data: {user},
+      } = await supabase.auth.getUser();
+      if (cancelled || !user) {
+        return;
+      }
+      // Pending SMS OTP is tied to auth.users.phone_change ΓåÆ API field `new_phone` (not `phone`).
+      let raw = user.new_phone || user.phone;
+      if (!raw) {
+        const {data: prof} = await supabase
+          .from('profiles')
+          .select('phone')
+          .eq('id', user.id)
+          .maybeSingle();
+        raw = prof?.phone;
+      }
+      if (cancelled || !raw) {
+        return;
+      }
+      try {
+        setPhoneE164(normalizePhilippinesToE164(String(raw)));
+      } catch {
+        setPhoneE164(String(raw));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [paramPhoneE164]);
 
   useEffect(() => {
     Animated.parallel([
@@ -132,6 +186,11 @@ export default function VerifyAccount({navigation, route}) {
   const handleVerify = async () => {
     const token = otp.join('');
 
+    if (!phoneE164) {
+      Alert.alert('Missing phone', 'No phone number on file. Please sign up again or contact support.');
+      return;
+    }
+
     if (token.length !== 6) {
       Alert.alert('Invalid Code', 'Please enter the 6-digit verification code.');
       return;
@@ -139,15 +198,41 @@ export default function VerifyAccount({navigation, route}) {
 
     try {
       setIsVerifying(true);
-      await verifySignUpOtp({
-        email,
+      await verifyPhoneOtp({
+        phone: phoneE164,
         token,
       });
 
-      navigation.reset({
-        index: 0,
-        routes: [{name: 'AccountCreated', params: {role}}],
-      });
+      await upsertProfileFromVerificationPayload(phoneE164, profilePayload || null);
+
+      const {
+        data: {user},
+      } = await supabase.auth.getUser();
+      if (user) {
+        updateProfile({
+          name: profilePayload?.fullName || user.user_metadata?.full_name || '',
+          email: profilePayload?.email || user.email || email,
+          phone: e164ToPhilippinesLocal11(phoneE164) || phoneE164,
+          address: profilePayload?.address ?? '',
+          age: profilePayload?.age ?? '',
+          guardian_name: profilePayload?.guardianName ?? '',
+          guardian_contact: profilePayload?.guardianContact ?? '',
+          role: profilePayload?.role || role,
+        });
+      }
+
+      if (isNewSignup) {
+        navigation.reset({
+          index: 0,
+          routes: [{name: 'AccountCreated', params: {role}}],
+        });
+      } else {
+        const isAttorney = String(role).toLowerCase() === 'attorney';
+        navigation.reset({
+          index: 0,
+          routes: [{name: isAttorney ? 'AttyLandingPage' : 'HomepageClient'}],
+        });
+      }
     } catch (error) {
       Alert.alert('Verification Failed', error?.message ?? 'Invalid or expired code.');
     } finally {
@@ -156,15 +241,19 @@ export default function VerifyAccount({navigation, route}) {
   };
 
   const handleResend = async () => {
-    if (!email || email === 'your email') {
-      Alert.alert('Missing Email', 'Please return to login and try again.');
+    if (!phoneE164) {
+      Alert.alert('Missing phone', 'Cannot resend code without a phone number.');
       return;
     }
 
     try {
       setIsResending(true);
-      await resendSignUpOtp({email});
-      Alert.alert('Code Sent', 'A new verification code has been sent.');
+      try {
+        await resendPhoneVerificationOtp({phone: phoneE164});
+      } catch (e) {
+        await requestPhoneVerificationSms(phoneE164);
+      }
+      Alert.alert('Code Sent', 'A new verification code has been sent via SMS.');
     } catch (error) {
       Alert.alert('Resend Failed', error?.message ?? 'Could not resend code.');
     } finally {
@@ -184,13 +273,12 @@ export default function VerifyAccount({navigation, route}) {
     ],
   };
 
-  const handleBack = () => {
-    if (navigation?.canGoBack?.()) {
-      navigation.goBack();
-      return;
-    }
-    navigation.navigate('Login');
+  const handleBack = async () => {
+    try { await supabase.auth.signOut(); } catch {}
+    navigation.reset({ index: 0, routes: [{ name: 'LoginSignup' }] });
   };
+
+  const phoneLabel = maskPhilippinesPhone(phoneE164);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -218,9 +306,10 @@ export default function VerifyAccount({navigation, route}) {
         </Animated.View>
 
         <Animated.View style={[styles.heroCard, containerStyle]}>
-          <Text style={styles.headerTitle}>Verify Account</Text>
+          <Text style={styles.headerTitle}>Verify your phone</Text>
           <Text style={styles.headerSub}>
-            Enter the 6-digit code sent to {email} to activate your account.
+            Enter the 6-digit code sent via SMS to {phoneLabel}.
+            {email ? ` (${email})` : ''}
           </Text>
         </Animated.View>
 
@@ -262,7 +351,7 @@ export default function VerifyAccount({navigation, route}) {
             <Text style={styles.primaryButtonText}>{isVerifying ? 'VERIFYING...' : 'VERIFY & PROCEED'}</Text>
           </PressScaleButton>
 
-          <TouchableOpacity style={styles.footerRow} onPress={() => navigation.navigate('Login')}>
+          <TouchableOpacity style={styles.footerRow} onPress={handleBack}>
             <Ionicons name="arrow-back" size={14} color={THEME.textSecondary} style={{marginRight: 6}} />
             <Text style={styles.footerText}>Back to Log In</Text>
           </TouchableOpacity>
@@ -300,7 +389,7 @@ const styles = StyleSheet.create({
     color: THEME.textMain,
     fontSize: 32,
     fontWeight: '900',
-    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
+    fontFamily: FONT_SERIF_DISPLAY,
     textAlign: 'center',
   },
   headerSub: {color: THEME.textSecondary, marginTop: 12, fontSize: 15, lineHeight: 22, textAlign: 'center', paddingHorizontal: 10},

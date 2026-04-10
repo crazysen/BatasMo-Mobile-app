@@ -109,6 +109,31 @@ export default function Login({navigation}) {
             ? 'Client'
             : 'Attorney';
 
+      if (data?.needsPhoneVerification) {
+        if (!data.phoneE164ForVerification) {
+          Alert.alert(
+            'Phone verification',
+            'Your account needs a mobile number on file for SMS verification. Please update your profile or contact support.',
+          );
+          return;
+        }
+        updateProfile({
+          email: user?.email ?? email.trim(),
+          name: fullNameFromApi ?? 'BatasMo User',
+          phone: user?.phone ?? '',
+          address: user?.address ?? '',
+          role: normalizedRole,
+        });
+        navigation.navigate('VerifyAccount', {
+          phoneE164: data.phoneE164ForVerification,
+          email: email.trim(),
+          role: normalizedRole,
+          isNewSignup: false,
+          profilePayload: null,
+        });
+        return;
+      }
+
       updateProfile({
         email: user?.email ?? email.trim(),
         name: fullNameFromApi ?? 'BatasMo User',
@@ -131,12 +156,14 @@ export default function Login({navigation}) {
         normalized.includes('email not verified')
       ) {
         Alert.alert(
-          'Email Not Verified',
-          'Please verify your account using the code sent to your email.',
+          'Verification required',
+          'Complete SMS verification for your mobile number to continue.',
         );
         navigation.navigate('VerifyAccount', {
           email: email.trim(),
           role: isClient ? 'Client' : 'Attorney',
+          isNewSignup: false,
+          profilePayload: null,
         });
         return;
       }

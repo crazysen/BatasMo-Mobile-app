@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   full_name text,
   email text UNIQUE,
   role user_role NOT NULL DEFAULT 'Client',
+  -- Philippine local 11-digit (09XXXXXXXXX). auth.users.phone is E.164; app maps before insert.
   phone text,
   address text,
   age int,
@@ -67,18 +68,20 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
-  INSERT INTO public.profiles (id, email, full_name, role)
+  INSERT INTO public.profiles (id, email, full_name, role, phone)
   VALUES (
     NEW.id,
     NEW.email,
     COALESCE(NEW.raw_user_meta_data ->> 'full_name', ''),
-    COALESCE((NEW.raw_user_meta_data ->> 'role')::user_role, 'Client')
+    COALESCE((NEW.raw_user_meta_data ->> 'role')::user_role, 'Client'),
+    NEW.phone
   )
   ON CONFLICT (id) DO UPDATE
   SET
     email = EXCLUDED.email,
     full_name = COALESCE(NULLIF(EXCLUDED.full_name, ''), public.profiles.full_name),
     role = EXCLUDED.role,
+    phone = COALESCE(EXCLUDED.phone, public.profiles.phone),
     updated_at = now();
 
   RETURN NEW;
