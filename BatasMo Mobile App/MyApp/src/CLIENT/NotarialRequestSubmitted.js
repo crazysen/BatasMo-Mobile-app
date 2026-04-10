@@ -1,0 +1,108 @@
+import React from 'react';
+import {
+  StyleSheet,
+  View,
+  Text,
+  TouchableOpacity,
+  SafeAreaView,
+} from 'react-native';
+
+const BookingSuccess = ({navigation}) => {
+  const handleBackToDashboard = () => {
+    navigation.navigate('HomepageClient');
+  };
+
+  return (
+    <SafeAreaView style={styles.overlay}>
+      <View style={styles.card}>
+        {/* Success Icon */}
+        <View style={styles.iconCircle}>
+          <Text style={styles.checkMark}>✓</Text>
+        </View>
+
+        {/* Text Content */}
+        <Text style={styles.title}>Request Submitted</Text>
+        <Text style={styles.description}>
+          Your legal concern has been successfully transmitted to our network. 
+          An attorney will review your case shortly.
+        </Text>
+
+        {/* Action Button */}
+        <TouchableOpacity style={styles.dashboardButton} onPress={handleBackToDashboard}>
+          <Text style={styles.buttonText}>Back to Dashboard</Text>
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
+  );
+};
+
+const styles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: '#0F172A', // Matches the dark background in your screenshot
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 32,
+    padding: 32,
+    width: '100%',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 5,
+  },
+  iconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#EAB308', // Matches the yellow theme
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  checkMark: {
+    color: '#FFFFFF',
+    fontSize: 40,
+    fontWeight: 'bold',
+  },
+  title: {
+    fontSize: 28,
+    fontFamily: 'serif', // Matches the serif header style
+    fontWeight: 'bold',
+    color: '#0F172A',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  description: {
+    fontSize: 16,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 32,
+    paddingHorizontal: 10,
+  },
+  dashboardButton: {
+    backgroundColor: '#EAB308', // Amber-500
+    paddingVertical: 16,
+    paddingHorizontal: 48,
+    borderRadius: 16,
+    width: '100%',
+    shadowColor: '#EAB308',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  buttonText: {
+    color: '#FFFFFF',
+    textAlign: 'center',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+});
+
+export default BookingSuccess;
