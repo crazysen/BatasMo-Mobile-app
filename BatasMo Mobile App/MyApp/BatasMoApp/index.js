@@ -1,11 +1,13 @@
 import 'react-native-gesture-handler';
-import React, {useEffect} from 'react';
+import React, {useEffect, useState} from 'react';
 import {registerRootComponent} from 'expo';
 import {StatusBar} from 'expo-status-bar';
 import * as SystemUI from 'expo-system-ui';
 import {GestureHandlerRootView} from 'react-native-gesture-handler';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
-import {DarkTheme, NavigationContainer} from '@react-navigation/native';
+import {DarkTheme, NavigationContainer, createNavigationContainerRef} from '@react-navigation/native';
+import {supabase} from './services/supabaseClient';
+import {normalizePhilippinesToE164} from './services/authService';
 import {REFERENCE_THEME as NavBase} from './constants/referenceTheme';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import LandingPage from './screens/LandingPage';
@@ -57,6 +59,8 @@ import AttorneyConsultationLogs from './screens/AttorneyConsultationLogs';
 
 const Stack = createNativeStackNavigator();
 
+export const navigationRef = createNavigationContainerRef();
+
 const navigationTheme = {
   ...DarkTheme,
   colors: {
@@ -71,15 +75,69 @@ const navigationTheme = {
 };
 
 function App() {
+  const [navReady, setNavReady] = useState(false);
+
   useEffect(() => {
     SystemUI.setBackgroundColorAsync(NavBase.base).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!navReady) {
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const {
+        data: {session},
+      } = await supabase.auth.getSession();
+      if (cancelled || !session?.user?.id) {
+        return;
+      }
+      if (session.user.phone_confirmed_at) {
+        return;
+      }
+
+      const tryE164 = (v) => { if (!v) return null; try { return normalizePhilippinesToE164(String(v)); } catch { return null; } };
+      let phoneE164 = tryE164(session.user.new_phone) || tryE164(session.user.phone);
+      if (!phoneE164) {
+        const {data: prof} = await supabase.from('profiles').select('phone').eq('id', session.user.id).maybeSingle();
+        phoneE164 = tryE164(prof?.phone);
+      }
+
+      if (cancelled || !phoneE164 || !navigationRef.isReady()) {
+        return;
+      }
+
+      const metaRole = session.user.user_metadata?.role || 'Client';
+      navigationRef.reset({
+        index: 0,
+        routes: [
+          {
+            name: 'VerifyAccount',
+            params: {
+              phoneE164,
+              email: session.user.email || '',
+              role: metaRole,
+              isNewSignup: false,
+              profilePayload: null,
+            },
+          },
+        ],
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [navReady]);
 
   return (
     <GestureHandlerRootView style={{flex: 1, backgroundColor: NavBase.base}}>
       <SafeAreaProvider style={{flex: 1, backgroundColor: NavBase.base}}>
         <UserProfileProvider>
-          <NavigationContainer theme={navigationTheme}>
+          <NavigationContainer
+            ref={navigationRef}
+            onReady={() => setNavReady(true)}
+            theme={navigationTheme}>
             <StatusBar style="light" />
             <Stack.Navigator
               screenOptions={{

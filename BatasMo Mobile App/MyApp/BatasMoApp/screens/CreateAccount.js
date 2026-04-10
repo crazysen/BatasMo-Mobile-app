@@ -66,7 +66,7 @@ export default function CreateAccount({ navigation }) {
     try {
       setIsSubmitting(true);
 
-      await signUpWithEmail({
+      const signUpResult = await signUpWithEmail({
         email: email.trim(),
         password,
         fullName: fullName.trim(),
@@ -89,11 +89,21 @@ export default function CreateAccount({ navigation }) {
         role,
       });
 
-      Alert.alert(
-        'Account Created',
-        'If email confirmation is enabled, please verify your email before logging in.',
-      );
-      navigation.navigate('VerifyAccount', {email: email.trim(), role});
+      navigation.navigate('VerifyAccount', {
+        phoneE164: signUpResult.phoneE164,
+        email: email.trim(),
+        role,
+        isNewSignup: true,
+        profilePayload: {
+          fullName: fullName.trim(),
+          email: email.trim(),
+          role,
+          age: parseInt(age),
+          address: address.trim(),
+          guardianName: parsedAge < 18 ? guardianName.trim() : null,
+          guardianContact: parsedAge < 18 ? guardianContact.trim() : null,
+        },
+      });
     } catch (error) {
       Alert.alert('Sign Up Failed', error?.message ?? 'Unable to create account.');
     } finally {

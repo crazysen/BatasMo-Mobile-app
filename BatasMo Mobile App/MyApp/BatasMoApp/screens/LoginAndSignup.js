@@ -80,6 +80,7 @@ const AuthInputField = ({
         autoCapitalize={autoCapitalize}
         keyboardType={keyboardType}
         autoCorrect={false}
+        maxLength={keyboardType === 'phone-pad' ? 11 : undefined}
       />
       {secure && (
         <TouchableOpacity onPress={onTogglePassword} style={styles.eyeButton}>
@@ -107,6 +108,7 @@ const AuthScreen = ({navigation}) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lockoutSeconds, setLockoutSeconds] = useState(0);
@@ -295,8 +297,13 @@ const AuthScreen = ({navigation}) => {
     if (isSubmitting) return;
 
     if (!isLogin) {
-      if (!fullName.trim() || !email.trim() || !password || !confirmPassword) {
-        Alert.alert('Missing information', 'Please complete all fields.');
+      if (!fullName.trim() || !email.trim() || !password || !confirmPassword || !phone.trim()) {
+        Alert.alert('Missing information', 'Please complete all fields including mobile number.');
+        return;
+      }
+      const digitsOnly = phone.replace(/\D/g, '');
+      if (digitsOnly.length < 10 || digitsOnly.length > 11) {
+        Alert.alert('Invalid mobile', 'Enter a valid Philippine mobile number (e.g. 09171234567).');
         return;
       }
       if (password !== confirmPassword) {
@@ -315,16 +322,28 @@ const AuthScreen = ({navigation}) => {
       try {
         setIsSubmitting(true);
 
-        await signUpWithEmail({
+        const signUpResult = await signUpWithEmail({
           email: email.trim(),
           password,
           fullName: fullName.trim(),
           role: 'Client',
+          phone: phone.trim(),
         });
 
         navigation.navigate('VerifyAccount', {
+          phoneE164: signUpResult.phoneE164,
           email: email.trim(),
           role: 'Client',
+          isNewSignup: true,
+          profilePayload: {
+            fullName: fullName.trim(),
+            email: email.trim(),
+            role: 'Client',
+            age: null,
+            address: null,
+            guardianName: null,
+            guardianContact: null,
+          },
         });
       } catch (error) {
         Alert.alert('Sign up failed', error?.message || 'Unable to create your account. Please try again.');
@@ -350,6 +369,24 @@ const AuthScreen = ({navigation}) => {
       const user = data?.user;
       const role = (user?.role || 'client').toLowerCase();
 
+      if (data?.needsPhoneVerification) {
+        if (!data.phoneE164ForVerification) {
+          Alert.alert(
+            'Phone verification',
+            'Your account needs a mobile number on file for SMS verification. Please update your profile or contact support.',
+          );
+          return;
+        }
+        navigation.navigate('VerifyAccount', {
+          phoneE164: data.phoneE164ForVerification,
+          email: email.trim(),
+          role: role === 'attorney' ? 'Attorney' : 'Client',
+          isNewSignup: false,
+          profilePayload: null,
+        });
+        return;
+      }
+
       if (role === 'attorney') {
         navigation.reset({ index: 0, routes: [{ name: 'AttyLandingPage' }] });
       } else {
@@ -360,10 +397,15 @@ const AuthScreen = ({navigation}) => {
       const normalized = String(message).toLowerCase();
 
       if (normalized.includes('email not confirmed') || normalized.includes('email not verified')) {
-        Alert.alert('Email Not Verified', 'Please verify your account using the code sent to your email.');
+        Alert.alert(
+          'Verification required',
+          'Complete SMS verification for your mobile number to continue.',
+        );
         navigation.navigate('VerifyAccount', {
           email: email.trim(),
           role: 'Client',
+          isNewSignup: false,
+          profilePayload: null,
         });
         return;
       }
@@ -469,6 +511,17 @@ const AuthScreen = ({navigation}) => {
               value={fullName}
               onChangeText={setFullName}
               autoCapitalize="words"
+              showPassword={showPassword}
+              onTogglePassword={() => setShowPassword(!showPassword)}
+            />
+          )}
+          {!isLogin && (
+            <AuthInputField
+              label="Mobile Number"
+              placeholder="09171234567"
+              value={phone}
+              onChangeText={setPhone}
+              keyboardType="phone-pad"
               showPassword={showPassword}
               onTogglePassword={() => setShowPassword(!showPassword)}
             />
